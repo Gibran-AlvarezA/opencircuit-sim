@@ -1,0 +1,74 @@
+name: Figuras
+
+on:
+  push:
+    branches: ["feat/export-**", "main"]
+  workflow_dispatch:
+
+jobs:
+  figuras:
+    name: Figuras de la Práctica 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config librsvg2-bin \
+            libxkbcommon-dev libwayland-dev libx11-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-x11-dev libgl1-mesa-dev \
+            libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev
+
+      - name: Compilar
+        run: cargo build --release
+
+      - name: Exportar figuras
+        run: |
+          mkdir -p figuras
+          BIN=./target/release/opencircuit
+          CIRC=assets/practica5.json
+          TITULO="Práctica 5 — detector de código 2 de 5"
+          $BIN --archivo $CIRC --exportar figuras/practica5_completa.svg --titulo "$TITULO" --leyenda
+          $BIN --archivo $CIRC --exportar figuras/practica5_placa_A.svg --placa A --ancho 320 --titulo "Placa A — AND (U1–U6) + inversores (U14)"
+          $BIN --archivo $CIRC --exportar figuras/practica5_placa_B.svg --placa B --ancho 320 --titulo "Placa B — OR (U9–U13)"
+          $BIN --archivo $CIRC --exportar figuras/practica5_placa_C.svg --placa C --ancho 320 --titulo "Placa C — entradas, display y LEDs"
+          for f in figuras/*.svg; do
+            rsvg-convert -w 4000 "$f" -o "${f%.svg}.png"
+            rsvg-convert -f pdf -o "${f%.svg}.pdf" "$f"
+          done
+          ls -l figuras
+
+      - name: Subir figuras
+        uses: actions/upload-artifact@v4
+        with:
+          name: figuras-practica5
+          path: figuras/
+          if-no-files-found: error
+
+  windows:
+    name: Binario de Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Compilar
+        run: cargo build --release
+
+      - name: Subir ejecutable
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencircuit-windows
+          path: target/release/opencircuit.exe
+          if-no-files-found: error

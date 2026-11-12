@@ -4,6 +4,7 @@ mod mcp;
 mod model;
 mod route;
 mod sim;
+mod svg;
 
 use eframe::egui;
 use egui::{Color32, RichText, Sense};
@@ -22,6 +23,11 @@ Uso:
   opencircuit --simular <x.json>      simula un circuito y muestra el resultado
   opencircuit --instrucciones <x.json>  instrucciones de armado en Markdown
   opencircuit --screenshot <x.png>    guarda una captura de la ventana y sale
+  opencircuit --exportar <x.svg>      figura vectorial para el reporte (no abre ventana)
+  opencircuit --placa A|B|C           exporta solo esa placa (con --exportar)
+  opencircuit --ancho <mm>            ancho del SVG (por defecto 420)
+  opencircuit --titulo <texto>        título de la figura
+  opencircuit --leyenda               añade la leyenda de colores de red
   opencircuit --pestana armado|ia     abre en esa pestaña
   opencircuit --panel grupos          abre el panel de grupos
   opencircuit --grupo <carpeta>       enfoca un grupo al abrir
@@ -69,6 +75,39 @@ fn main() {
             instr::markdown(&c.nombre, &instr::instrucciones(&c, &s, t.as_ref()))
         );
         return;
+    }
+    // Exportación vectorial: no abre ventana, así que funciona en CI sin GPU.
+    if let Some(destino) = get("--exportar") {
+        if destino.to_lowercase().ends_with(".svg") {
+            let c = leer(file.to_string_lossy().to_string());
+            let s = sim::simulate(&c);
+            let placa = get("--placa").and_then(|p| match p.to_uppercase().as_str() {
+                "A" | "1" => Some(1u8),
+                "B" | "2" => Some(2u8),
+                "C" | "3" => Some(3u8),
+                otro => otro.parse::<u8>().ok().filter(|n| (1..=3).contains(n)),
+            });
+            let cfg = svg::Cfg {
+                placa,
+                ancho_mm: get("--ancho")
+                    .and_then(|x| x.parse::<f32>().ok())
+                    .unwrap_or(420.0),
+                titulo: get("--titulo"),
+                leyenda: has("--leyenda"),
+            };
+            let out = svg::exportar(&c, &s, &cfg);
+            if let Some(dir) = Path::new(&destino).parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            match std::fs::write(&destino, out) {
+                Ok(()) => println!("SVG: {destino}"),
+                Err(e) => {
+                    eprintln!("No pude escribir {destino}: {e}");
+                    std::process::exit(1);
+                }
+            }
+            return;
+        }
     }
     let shot = get("--screenshot").map(PathBuf::from);
     let tab = match get("--pestana").as_deref() {

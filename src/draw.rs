@@ -425,7 +425,7 @@ fn label(p: &Painter, at: Pos2, t: &str, s: f32) {
     p.galley(r.center() - g.size() / 2.0, g, Color32::WHITE);
 }
 
-fn net_color(name: &str) -> Color32 {
+pub fn net_color(name: &str) -> Color32 {
     if name.eq_ignore_ascii_case("GND") {
         return Color32::from_rgb(95, 95, 95);
     }
