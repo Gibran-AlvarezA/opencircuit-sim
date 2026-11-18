@@ -24,7 +24,7 @@ impl View {
         let (x0, y0, x1, y1) = ext(tableros, columnas, posiciones);
         let s = ((r.width() - 16.0) / (x1 - x0))
             .min((r.height() - 70.0) / (y1 - y0))
-            .max(4.0);
+            .max(0.75);
         View {
             o: pos2(
                 r.center().x - (x0 + x1) / 2.0 * s,
@@ -492,6 +492,17 @@ fn net_tag(p: &Painter, v: &View, c: &Comp, h: Hole) {
 }
 
 fn display_body(v: &View, hs: &[Hole], s: f32) -> Rect {
+    if hs.len() >= 10 {
+        // Módulo de 1.2": dos filas de pines; el cuerpo va de una fila a la otra.
+        let x0 = hs.iter().map(|h| v.h(*h).x).fold(f32::MAX, f32::min);
+        let x1 = hs.iter().map(|h| v.h(*h).x).fold(f32::MIN, f32::max);
+        let y0 = hs.iter().map(|h| v.h(*h).y).fold(f32::MAX, f32::min);
+        let y1 = hs.iter().map(|h| v.h(*h).y).fold(f32::MIN, f32::max);
+        return Rect::from_min_max(
+            pos2(x0 - 0.7 * s, y0 - 0.5 * s),
+            pos2(x1 + 0.7 * s, y1 + 0.5 * s),
+        );
+    }
     let x0 = hs[0..7].iter().map(|h| v.h(*h).x).fold(f32::MAX, f32::min);
     let x1 = hs[0..7].iter().map(|h| v.h(*h).x).fold(f32::MIN, f32::max);
     let y = v.h(hs[0]).y;
@@ -501,7 +512,148 @@ fn display_body(v: &View, hs: &[Hole], s: f32) -> Rect {
     )
 }
 
+/// Barra de un segmento con las puntas redondeadas.
+fn seg_bar(p: &Painter, a: Pos2, b: Pos2, w: f32, col: Color32) {
+    p.line_segment([a, b], Stroke::new(w, col));
+    p.circle_filled(a, w * 0.5, col);
+    p.circle_filled(b, w * 0.5, col);
+}
+
+/// Display de 1.2" de 10 pines, dibujado como el módulo físico.
+fn draw_module(p: &Painter, v: &View, c: &Comp, hs: &[Hole], sim: &Sim, s: f32) {
+    let body = display_body(v, hs, s);
+    for h in hs {
+        let hp = v.h(*h);
+        let edge = if hp.y < body.center().y {
+            body.top()
+        } else {
+            body.bottom()
+        };
+        p.line_segment(
+            [hp, pos2(hp.x, edge)],
+            Stroke::new(0.13 * s, Color32::from_rgb(185, 185, 192)),
+        );
+    }
+    p.rect_filled(
+        body.translate(vec2(0.14 * s, 0.2 * s)),
+        0.22 * s,
+        Color32::from_black_alpha(120),
+    );
+    p.rect_filled(body, 0.22 * s, Color32::from_rgb(24, 22, 24));
+    p.rect_stroke(
+        body,
+        0.22 * s,
+        Stroke::new(0.08 * s, Color32::from_rgb(70, 66, 70)),
+        egui::StrokeKind::Inside,
+    );
+    let inner = body.shrink(0.42 * s);
+    p.rect_filled(inner, 0.16 * s, Color32::from_rgb(16, 11, 11));
+    // Bisel: brillo arriba a la izquierda.
+    p.line_segment(
+        [inner.left_top(), inner.right_top()],
+        Stroke::new(0.05 * s, Color32::from_white_alpha(18)),
+    );
+    let d = sim.display(&c.id);
+    let segs = d.map(|d| d.segments).unwrap_or([false; 7]);
+    let dp = d.map(|d| d.dp).unwrap_or(false);
+    let win = inner.shrink(0.35 * s);
+    let w = (win.width() * 0.34).clamp(0.5 * s, 1.2 * s);
+    let h = (win.height() * 0.3).clamp(0.7 * s, 1.6 * s);
+    let cx = win.center().x - 0.1 * s;
+    let cy = win.center().y;
+    let (xl, xr) = (cx - w, cx + w);
+    let (yt, ym, yb) = (cy - h, cy, cy + h);
+    let on = Color32::from_rgb(255, 62, 40);
+    let core = Color32::from_rgb(255, 150, 120);
+    let off = Color32::from_rgb(42, 28, 26);
+    let lw = (0.22 * s).max(2.0);
+    let seg = |a: Pos2, b: Pos2, lit: bool| {
+        if lit {
+            seg_bar(
+                p,
+                a,
+                b,
+                lw * 2.1,
+                Color32::from_rgba_unmultiplied(255, 60, 30, 26),
+            );
+            seg_bar(
+                p,
+                a,
+                b,
+                lw * 1.45,
+                Color32::from_rgba_unmultiplied(255, 70, 40, 70),
+            );
+            seg_bar(p, a, b, lw, on);
+            seg_bar(p, a, b, lw * 0.45, core);
+        } else {
+            seg_bar(p, a, b, lw, off);
+        }
+    };
+    seg(pos2(xl, yt), pos2(xr, yt), segs[0]); // a
+    seg(pos2(xr, yt), pos2(xr, ym), segs[1]); // b
+    seg(pos2(xr, ym), pos2(xr, yb), segs[2]); // c
+    seg(pos2(xl, yb), pos2(xr, yb), segs[3]); // d
+    seg(pos2(xl, ym), pos2(xl, yb), segs[4]); // e
+    seg(pos2(xl, yt), pos2(xl, ym), segs[5]); // f
+    seg(pos2(xl, ym), pos2(xr, ym), segs[6]); // g
+    let dpp = pos2(xr + 0.45 * s, yb + 0.1 * s);
+    if dp {
+        p.circle_filled(
+            dpp,
+            lw * 1.3,
+            Color32::from_rgba_unmultiplied(255, 60, 30, 40),
+        );
+        p.circle_filled(dpp, lw * 0.75, on);
+        p.circle_filled(dpp, lw * 0.35, core);
+    } else {
+        p.circle_filled(dpp, lw * 0.6, off);
+    }
+    // Rótulos impresos en el módulo.
+    p.text(
+        body.left_top() + vec2(0.28 * s, 0.2 * s),
+        Align2::LEFT_TOP,
+        &c.id,
+        FontId::proportional(0.4 * s),
+        Color32::from_rgb(150, 150, 160),
+    );
+    if s > 14.0 {
+        // Orden físico real: g f • a b arriba; e d • c dp abajo.
+        for (t, h) in [
+            ("g", hs[6]),
+            ("f", hs[5]),
+            ("•", hs[7]),
+            ("a", hs[0]),
+            ("b", hs[1]),
+            ("e", hs[4]),
+            ("d", hs[3]),
+            ("•", hs[8]),
+            ("c", hs[2]),
+            ("dp", hs[9]),
+        ] {
+            let hp = v.h(h);
+            let arriba = hp.y < body.center().y;
+            p.text(
+                pos2(
+                    hp.x,
+                    if arriba {
+                        body.top() + 0.62 * s
+                    } else {
+                        body.bottom() - 0.62 * s
+                    },
+                ),
+                Align2::CENTER_CENTER,
+                t,
+                FontId::proportional(0.34 * s),
+                Color32::from_rgb(130, 130, 140),
+            );
+        }
+    }
+}
+
 fn draw_display(p: &Painter, v: &View, c: &Comp, hs: &[Hole], sim: &Sim, s: f32) {
+    if hs.len() >= 10 {
+        return draw_module(p, v, c, hs, sim, s);
+    }
     let body = display_body(v, hs, s);
     for h in hs {
         p.line_segment(
@@ -823,6 +975,23 @@ pub fn comp(p: &Painter, v: &View, c: &Comp, hs: &[Hole], sim: &Sim, look: Look,
                 FontId::proportional(0.42 * s),
                 Color32::from_rgb(150, 150, 150),
             );
+            if s > 14.0 {
+                for (i, h) in hs.iter().enumerate() {
+                    let hp = v.h(*h);
+                    let y = if hp.y < body.center().y {
+                        body.top() - 0.62 * s
+                    } else {
+                        body.bottom() + 0.62 * s
+                    };
+                    p.text(
+                        pos2(hp.x, y),
+                        Align2::CENTER_CENTER,
+                        (i + 1).to_string(),
+                        FontId::proportional(0.32 * s),
+                        Color32::from_rgb(215, 215, 220),
+                    );
+                }
+            }
             let powered = sim.chips.iter().any(|x| x.id == c.id && x.powered);
             if !powered {
                 p.text(

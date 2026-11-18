@@ -18,6 +18,7 @@ pub struct LedState {
 pub struct DisplayState {
     pub id: String,
     pub segments: [bool; 7],
+    pub dp: bool,
     pub text: char,
 }
 
@@ -227,7 +228,18 @@ pub fn simulate(c: &Circuito) -> Sim {
                     net(&hs[5]),
                     net(&hs[6]),
                 ];
-                let common = net(&hs[7]);
+                // Los dos pines «común» del módulo están unidos por dentro: sirve cualquiera.
+                // shortcut: si se conectan a nets distintos se ignora el conflicto.
+                let common = if hs.len() > 8 {
+                    let (c1, c2) = (net(&hs[7]), net(&hs[8]));
+                    if fixed[c1].is_some() {
+                        c1
+                    } else {
+                        c2
+                    }
+                } else {
+                    net(&hs[7])
+                };
                 displays.push(DisplayCalc {
                     id: comp.id.clone(),
                 });
@@ -238,6 +250,15 @@ pub fn simulate(c: &Circuito) -> Sim {
                         k: common,
                         vf: 1.8,
                         display: Some((di, si)),
+                    });
+                }
+                if hs.len() > 8 {
+                    leds.push(LedCalc {
+                        id: format!("{}.dp", comp.id),
+                        a: net(&hs[9]),
+                        k: common,
+                        vf: 1.8,
+                        display: Some((di, 7)),
                     });
                 }
             }
@@ -407,7 +428,17 @@ pub fn simulate(c: &Circuito) -> Sim {
         });
     }
 
+    for (comp, hs) in &parsed {
+        if comp.tipo == Tipo::Display && hs.len() == 8 {
+            sim.warnings.push(format!(
+                "{}: usa el display antiguo de 8 pines; el módulo real de 1.2\" se declara con \"pines\":[\"c20\"]",
+                comp.id
+            ));
+        }
+    }
+
     let mut seg_on = vec![[false; 7]; displays.len()];
+    let mut dp_on = vec![false; displays.len()];
     for (i, l) in leds.iter().enumerate() {
         let ma = if led_on[i] {
             (v[l.a] - v[l.k] - l.vf) / R_LED * 1000.0
@@ -415,7 +446,11 @@ pub fn simulate(c: &Circuito) -> Sim {
             0.0
         };
         if let Some((di, si)) = l.display {
-            seg_on[di][si] = ma > 0.1;
+            if si < 7 {
+                seg_on[di][si] = ma > 0.1;
+            } else {
+                dp_on[di] = ma > 0.1;
+            }
             continue; // los segmentos no se listan como LEDs sueltos
         }
         if ma > 60.0 {
@@ -445,6 +480,7 @@ pub fn simulate(c: &Circuito) -> Sim {
         sim.displays.push(DisplayState {
             id: d.id.clone(),
             segments: seg_on[di],
+            dp: dp_on[di],
             text: display_char(&seg_on[di]),
         });
     }
@@ -728,7 +764,7 @@ mod tests {
             .expect("falta assets/practica5.json")
     }
 
-    fn con_switches(mut c: Circuito, bits: [bool; 5]) -> Circuito {
+    fn con_switches(mut c: Circuito, bits: &[bool]) -> Circuito {
         for (i, b) in bits.iter().enumerate() {
             if let Some(x) = c
                 .componentes
@@ -739,6 +775,78 @@ mod tests {
             }
         }
         c
+    }
+
+    #[test]
+    fn display_de_10_pines() {
+        use Tipo::*;
+        let k = Comp::nuevo;
+        let c = Circuito {
+            componentes: vec![
+                k("F1", Fuente, &["t+1", "t-1"]).v(5.0),
+                k("R1", Resistencia, &["t+2", "d24"]).v(330.0),
+                k("R2", Resistencia, &["t+3", "h23"]).v(330.0),
+                k("W1", Cable, &["t-2", "d22"]),
+                k("DS1", Display, &["c20"]),
+            ],
+            ..Default::default()
+        };
+        let nombres: Vec<String> = c
+            .find("DS1")
+            .unwrap()
+            .holes()
+            .unwrap()
+            .iter()
+            .map(|h| h.name())
+            .collect();
+        // Orden lógico a, b, c, d, e, f, g, común 1, común 2, dp.
+        assert_eq!(
+            nombres,
+            ["c23", "c24", "g23", "g21", "g20", "c21", "c20", "c22", "g22", "g24"]
+        );
+        let s = simulate(&c);
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        let d = s.display("DS1").unwrap();
+        assert_eq!(d.segments, [false, true, true, false, false, false, false]);
+        assert_eq!(d.text, '1');
+        assert!(!d.dp);
+        // El segundo común también sirve (los dos están unidos por dentro).
+        let mut c2 = c.clone();
+        c2.componentes.retain(|x| x.id != "W1");
+        c2.componentes.push(k("W2", Cable, &["t-4", "h22"]));
+        let s2 = simulate(&c2);
+        assert_eq!(s2.display("DS1").unwrap().text, '1', "{:?}", s2.errors);
+    }
+
+    #[test]
+    fn display_no_cabe_en_la_placa() {
+        let c = Comp::nuevo("DS1", Tipo::Display, &["j30"]);
+        assert!(c.holes().is_err());
+        let c = Comp::nuevo("DS1", Tipo::Display, &["c58"]);
+        assert!(c.holes().is_err());
+    }
+
+    #[test]
+    fn patillaje_7404() {
+        let info = chip_info("7404").expect("7404");
+        assert_eq!(
+            info.gates,
+            [
+                (&[1u8][..], 2u8),
+                (&[3][..], 4),
+                (&[5][..], 6),
+                (&[9][..], 8),
+                (&[11][..], 10),
+                (&[13][..], 12),
+            ]
+        );
+        assert!(info.pin_fn(1).contains("entrada"));
+        assert!(info.pin_fn(8).contains("salida"));
+        assert!(info.pin_fn(9).contains("entrada"));
+        assert_eq!(
+            info.pinout(),
+            "compuerta 1: entrada 1 → salida 2; compuerta 2: entrada 3 → salida 4; compuerta 3: entrada 5 → salida 6; compuerta 4: entrada 9 → salida 8; compuerta 5: entrada 11 → salida 10; compuerta 6: entrada 13 → salida 12"
+        );
     }
 
     #[test]
@@ -823,11 +931,11 @@ mod tests {
     #[test]
     fn display_muestra_1_y_e() {
         let c = practica5();
-        let s = simulate(&con_switches(c.clone(), [false, false, false, true, true]));
+        let s = simulate(&con_switches(c.clone(), &[false, false, false, true, true]));
         let d = s.display("DS1").expect("falta el display DS1");
         assert_eq!(d.text, '1');
         assert_eq!(d.segments, [false, true, true, false, false, false, false]);
-        let s = simulate(&con_switches(c, [false; 5]));
+        let s = simulate(&con_switches(c, &[false; 5]));
         let d = s.display("DS1").expect("falta el display DS1");
         assert_eq!(d.text, 'E');
         assert_eq!(d.segments, [true, false, false, true, true, true, true]);
@@ -856,7 +964,7 @@ mod tests {
                 f[4] == "1",
                 f[5] == "1",
             ];
-            let s = simulate(&con_switches(c.clone(), bits));
+            let s = simulate(&con_switches(c.clone(), &bits));
             let led_a = s.led("D1").is_some_and(|l| l.on);
             let led_b = s.led("D2").is_some_and(|l| l.on);
             let disp = s.display("DS1").map(|d| d.text).unwrap_or(' ');
@@ -874,5 +982,53 @@ mod tests {
         }
         assert_eq!(ok, 32, "solo pasaron {ok}/32");
         println!("32/32");
+    }
+
+    /// Práctica 6: 16 combinaciones de A-D contra el checklist y los CI alimentados.
+    fn check_practica6(nombre: &str, csv: &str, chips: usize) {
+        let c = ejemplos()
+            .into_iter()
+            .find(|c| c.nombre.contains(nombre))
+            .expect("falta el JSON de la Práctica 6");
+        let base = simulate(&c);
+        assert!(base.errors.is_empty(), "{:?}", base.errors);
+        assert!(
+            !base.warnings.iter().any(|w| w.contains("al aire")),
+            "entradas flotantes: {:?}",
+            base.warnings
+        );
+        assert_eq!(base.chips.len(), chips, "deben ser {chips} CI");
+        assert!(
+            base.chips.iter().all(|ch| ch.powered),
+            "algún CI quedó sin alimentación"
+        );
+        let mut ok = 0;
+        for line in csv.lines().skip(1) {
+            let f: Vec<&str> = line.split(',').collect();
+            if f.len() < 12 {
+                continue;
+            }
+            let bits = [f[1] == "1", f[2] == "1", f[3] == "1", f[4] == "1"];
+            let s = simulate(&con_switches(c.clone(), &bits));
+            let d = s.display("DS1").expect("falta el display DS1");
+            let esperado = [f[5], f[6], f[7], f[8], f[9], f[10], f[11]].map(|x| x == "1");
+            assert_eq!(d.segments, esperado, "fila m={} con {bits:?}", f[0]);
+            ok += 1;
+        }
+        assert_eq!(ok, 16, "solo pasaron {ok}/16");
+    }
+
+    #[test]
+    fn practica6_rumbo_16_casos() {
+        check_practica6("rumbo", include_str!("../assets/checklist_rumbo.csv"), 8);
+    }
+
+    #[test]
+    fn practica6_celular_16_casos() {
+        check_practica6(
+            "celular",
+            include_str!("../assets/checklist_celular.csv"),
+            9,
+        );
     }
 }

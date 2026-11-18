@@ -23,6 +23,7 @@ Uso:
   opencircuit --instrucciones <x.json>  instrucciones de armado en Markdown
   opencircuit --screenshot <x.png>    guarda una captura de la ventana y sale
   opencircuit --pestana armado|ia     abre en esa pestaña
+  opencircuit --paso <n>              abre en el paso n de las instrucciones
   opencircuit --panel grupos          abre el panel de grupos
   opencircuit --grupo <carpeta>       enfoca un grupo al abrir
   opencircuit --solo                  muestra solo el grupo enfocado";
@@ -114,6 +115,9 @@ fn main() {
             tema(&cc.egui_ctx);
             let mut app = App::new(file, shot);
             app.tab = tab;
+            if let Some(n) = get("--paso").and_then(|n| n.parse::<usize>().ok()) {
+                app.paso = n.saturating_sub(1).min(app.pasos.len().saturating_sub(1));
+            }
             app.lado = lado;
             if let Some(g) = grupo {
                 app.grupo = Some(g);
@@ -280,6 +284,9 @@ struct App {
     pending: Option<Hole>,
     selected: Option<String>,
     paso: usize,
+    /// Último paso ya encuadrado (para centrar la vista sólo al cambiar de paso).
+    paso_visto: usize,
+    scroll_paso: bool,
     file: PathBuf,
     mtime: Option<SystemTime>,
     next_poll: f64,
@@ -341,6 +348,8 @@ impl App {
             pending: None,
             selected: None,
             paso: 0,
+            paso_visto: 0,
+            scroll_paso: false,
             mtime: mtime(&file),
             file,
             next_poll: 0.0,
@@ -435,6 +444,7 @@ impl App {
         self.zoom = 1.0;
         self.pan = egui::Vec2::ZERO;
         self.paso = 0;
+        self.paso_visto = 0;
         self.grupo = None;
         self.solo_grupo = false;
         self.status = msg;
@@ -629,6 +639,16 @@ impl App {
         }
         let centro = egui::pos2((min.x + max.x) / 2.0, (min.y + max.y) / 2.0);
         self.pan += rect.center() - centro;
+    }
+
+    /// Centra la vista en las piezas del paso actual, sin tocar el zoom.
+    fn centrar_paso(&mut self) {
+        let ids = self
+            .pasos
+            .get(self.paso)
+            .map(|p| p.ids.clone())
+            .unwrap_or_default();
+        self.centrar_ids(&ids);
     }
 
     fn centrar_grupo(&mut self, f: &str) {
@@ -989,16 +1009,8 @@ impl App {
         let rect = resp.rect;
         self.ultimo_rect = Some(rect);
         draw::mat(&painter, rect);
-        let mut view = if assembly {
-            // La guía describe las placas en fila: la vista previa las muestra así, no donde se arrastraron.
-            draw::View::fit(rect, self.circ.tableros, self.circ.columnas, &[])
-        } else {
-            self.view_for(rect)
-        };
-        if let Some(pos) = resp
-            .hover_pos()
-            .filter(|_| !assembly && self.shot.is_none())
-        {
+        let mut view = self.view_for(rect);
+        if let Some(pos) = resp.hover_pos().filter(|_| self.shot.is_none()) {
             let scroll = ui.input(|i| i.smooth_scroll_delta.y);
             if scroll.abs() > 0.01 {
                 let world = view.inv(pos);
@@ -2352,6 +2364,11 @@ impl App {
             .exact_width(270.0)
             .show(ctx, |ui| {
                 ui.heading("Pasos de armado");
+                ui.label(
+                    RichText::new("Rueda: acercar · Arrastra: mover · Doble clic: reiniciar")
+                        .small()
+                        .weak(),
+                );
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     let mut go = None;
                     for (i, p) in self.pasos.iter().enumerate() {
@@ -2361,7 +2378,11 @@ impl App {
                         } else {
                             txt
                         };
-                        if ui.selectable_label(self.paso == i, txt).clicked() {
+                        let r = ui.selectable_label(self.paso == i, txt);
+                        if i == self.paso && self.scroll_paso {
+                            r.scroll_to_me(Some(egui::Align::Center));
+                        }
+                        if r.clicked() {
                             go = Some(i);
                         }
                     }
@@ -2369,6 +2390,7 @@ impl App {
                         self.paso = i;
                     }
                 });
+                self.scroll_paso = false;
             });
         egui::SidePanel::right("detalle")
             .resizable(false)
@@ -2415,6 +2437,9 @@ impl App {
                     }
                 });
                 ui.label("También puedes usar las flechas del teclado.");
+                if ui.button("Centrar el paso en la vista").clicked() {
+                    self.centrar_paso();
+                }
                 if ui.button("Guardar instrucciones en un archivo").clicked() {
                     let path = self.file.with_file_name("instrucciones_armado.md");
                     self.status = match std::fs::write(
@@ -2529,6 +2554,11 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_file(ctx);
+        if self.tab == Tab::Armado && self.paso != self.paso_visto && self.ultimo_rect.is_some() {
+            self.paso_visto = self.paso;
+            self.centrar_paso();
+            self.scroll_paso = true;
+        }
         if !ctx.wants_keyboard_input() {
             let (esc, undo, redo, del, right, left, centrar) = ctx.input(|i| {
                 (
@@ -2769,7 +2799,8 @@ impl eframe::App for App {
             }
             ctx.request_repaint();
         } else if self.tab == Tab::Armado {
-            ctx.request_repaint();
+            // Sólo se anima el brillo del paso; no hace falta repintar a 60 fps.
+            ctx.request_repaint_after(Duration::from_millis(70));
         } else {
             ctx.request_repaint_after(Duration::from_millis(700));
         }

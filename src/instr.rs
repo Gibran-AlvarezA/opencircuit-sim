@@ -48,8 +48,8 @@ fn donde(h: Hole) -> String {
     format!("{} ({})", h.name(), h.describe())
 }
 
-fn largo_mm(a: Hole, b: Hole) -> i32 {
-    let ((x1, y1), (x2, y2)) = (hole_xy(a), hole_xy(b));
+fn largo_mm(c: &Circuito, a: Hole, b: Hole) -> i32 {
+    let ((x1, y1), (x2, y2)) = (crate::route::pos(c, a), crate::route::pos(c, b));
     let mm = ((x1 - x2).hypot(y1 - y2) * 2.54 + 10.0) as i32;
     (mm + 4) / 5 * 5
 }
@@ -106,7 +106,7 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
     )];
     if c.tableros > 1 {
         mat.push(format!(
-            "Vas a usar {} placas en fila. Numéralas 1, 2 y 3 de izquierda a derecha; todas comparten el +5 V y el GND mediante cables entre sus rieles.",
+            "Vas a usar {} placas. Colócalas como en la vista previa; cada una lleva su rótulo PLACA 1, 2 o 3. Todas comparten el +5 V y el GND mediante cables entre sus rieles.",
             c.tableros
         ));
     }
@@ -153,18 +153,19 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
         );
     }
     for (x, _) in de(Tipo::Display) {
-        add(
+        let m = if x.pines.len() != 8 {
+            "display de 7 segmentos de 1.2 pulgadas de cátodo común (10 pines: g, f, común, a, b arriba; e, d, común, c, dp abajo)"
+        } else {
             "display de 7 segmentos de cátodo común (8 terminales: a, b, c, d, e, f, g y común)"
-                .into(),
-            &x.id,
-        );
+        };
+        add(m.into(), &x.id);
     }
     for (x, h) in de(Tipo::Cable) {
         add(
             format!(
                 "cable {} de unos {} mm",
                 crate::draw::nombre_color(&x.color_or("rojo")),
-                largo_mm(h[0], h[1])
+                largo_mm(c, h[0], h[1])
             ),
             &x.id,
         );
@@ -194,7 +195,7 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
     pasos.push(Paso {
         titulo: "Conoce y orienta tus placas".into(),
         texto: vec![
-            "Pon las placas horizontales frente a ti, en fila: la columna 1 a la izquierda y la fila a arriba (los números y letras vienen impresos en la placa).".into(),
+            "Pon las placas horizontales frente a ti, como se ven en la vista previa: cada una lleva su rótulo PLACA 1, 2 o 3, la columna 1 a la izquierda y la fila a arriba (los números y letras vienen impresos en la placa).".into(),
             "Cada columna tiene dos grupos de 5 orificios conectados por dentro: a-e (arriba) y f-j (abajo). Lo que pongas en el mismo grupo queda conectado.".into(),
             "El canal del centro separa las dos mitades: entre la fila e y la fila f no hay conexión.".into(),
             "Arriba y abajo están los rieles de alimentación: línea roja = positivo (+), línea azul = negativo (-). Todos los orificios de un riel están conectados a lo largo.".into(),
@@ -226,6 +227,11 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
                 format!("Comprueba: el pin 1 queda en {} y el pin 14 en {}.", h[0].name(), h[13].name()),
                 "Alinea todas las patas antes de empujar y presiona de forma pareja con los dos pulgares hasta que entre del todo. Si las patas están muy abiertas, apóyalas de lado sobre la mesa y dóblalas un poco hacia dentro.".into(),
                 format!("Patillaje: pin 14 = VCC (+), pin 7 = GND (-); {}.", info.pinout()),
+                if info.gate == Gate::Not {
+                    "Ojo con el 7404: las compuertas 4, 5 y 6 tienen la SALIDA en los pines 8, 10 y 12 (la entrada está en 9, 11 y 13). En las compuertas 1 a 3 la entrada es el pin impar y la salida el par. Guíate por los números impresos."
+                } else {
+                    "Los números impresos marcan el pin 1 en la esquina de la muesca; los pares entrada-salida son los del patillaje."
+                }.into(),
                 "Estos chips son sensibles a la electricidad estática: toca algo metálico antes de manipularlos.".into(),
             ],
             ids: vec![x.id.clone()],
@@ -234,11 +240,19 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
 
     // 4. Display
     for (x, h) in de(Tipo::Display) {
-        let mut texto = vec![
-            "Toma el display de 7 segmentos de CÁTODO COMÚN. Si el tuyo es de ánodo común, no funcionará directamente con estas salidas: necesitarías invertir las señales.".into(),
-            "Identifica los 8 terminales: a, b, c, d, e, f, g y común. En muchos módulos vienen marcados; si no, usa la hoja de datos del modelo.".into(),
-            "El orden del simulador es a, b, c, d, e, f, g, común. El común va a GND. Si tu display tiene dos pines de común, conecta los dos a GND.".into(),
-        ];
+        let mut texto = if h.len() >= 10 {
+            vec![
+                "Toma el display de 1.2 pulgadas de CÁTODO COMÚN: 10 pines en dos filas. Arriba van g, f, común, a, b; abajo van e, d, común, c, dp (el punto decimal). Si el tuyo fuera de ánodo común no funcionaría directamente con estas salidas: necesitarías invertir las señales.".into(),
+                "Oriéntalo como en la vista previa: el pin g arriba a la izquierda y el punto decimal abajo a la derecha.".into(),
+                "Los dos pines «común» están unidos por dentro: conecta al menos uno a GND (mejor los dos). Si no usas el punto decimal, deja dp sin conectar.".into(),
+            ]
+        } else {
+            vec![
+                "Toma el display de 7 segmentos de CÁTODO COMÚN. Si el tuyo es de ánodo común, no funcionará directamente con estas salidas: necesitarías invertir las señales.".into(),
+                "Identifica los 8 terminales: a, b, c, d, e, f, g y común. En muchos módulos vienen marcados; si no, usa la hoja de datos del modelo.".into(),
+                "El orden del simulador es a, b, c, d, e, f, g, común. El común va a GND. Si tu display tiene dos pines de común, conecta los dos a GND.".into(),
+            ]
+        };
         for (i, hh) in h.iter().enumerate() {
             texto.push(format!(
                 "Inserta el terminal {} en {}.",
@@ -269,7 +283,7 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
             format!(
                 "Corta un cable {} de unos {} mm (o usa un cable puente de ese color).",
                 crate::draw::nombre_color(&x.color_or("rojo")),
-                largo_mm(h[0], h[1])
+                largo_mm(c, h[0], h[1])
             ),
             "Si no es un cable puente, pela unos 7 mm de aislante en cada punta.".into(),
             format!("Conecta un extremo en {}.", donde(h[0])),
@@ -499,5 +513,19 @@ mod tests {
             super::bandas(4.7),
             ["amarillo", "violeta", "dorado", "dorado"]
         );
+    }
+
+    #[test]
+    fn largo_cable_usa_posiciones() {
+        use crate::model::{Circuito, Hole};
+        let mut c = Circuito {
+            tableros: 2,
+            ..Default::default()
+        };
+        let (a, b) = (Hole::parse("a1").unwrap(), Hole::parse("a1@2").unwrap());
+        let separadas = super::largo_mm(&c, a, b);
+        // Acercar la placa 2 dos columnas (5,08 mm) acorta el cable en 5 mm tras redondear.
+        c.posiciones = vec![[0.0, 0.0], [-2.0, 0.0]];
+        assert_eq!(super::largo_mm(&c, a, b), separadas - 5);
     }
 }

@@ -22,7 +22,7 @@ OpenCircuit nació de un pedido concreto: un software que simulase circuitos vi�
 
 ## Verificación
 
-- 19 pruebas automáticas: simulación, compuertas, displays, etiquetas, conversión cables/etiquetas, grupos, rehacer, rutas ortogonales y los 32 casos de la Práctica 5.
+- 23 pruebas automáticas: simulación, compuertas, displays, etiquetas, conversión cables/etiquetas, grupos, rehacer, rutas ortogonales y los 32 casos de la Práctica 5.
 - `cargo clippy --all-targets -- -D warnings` sin avisos.
 - La Práctica 5 se simula con 228 componentes, 3 placas de 60 columnas y 12 chips.
 - Capturas de la interfaz en `docs/screenshots/`.

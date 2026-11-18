@@ -22,6 +22,7 @@
 - Deshacer, rehacer, selección múltiple y atajos de teclado.
 - Integración MCP para Claude Desktop, Claude Code, Cursor y otros agentes.
 - Práctica 5 incluida: detector 2 de 5 con 3 placas, 12 CI, display, LEDs y 32 combinaciones.
+- Práctica 6 incluida: rumbo de navegación (8 CI) y decodificador BCD del celular (9 CI), 3 placas cada uno y 16 combinaciones.
 
 ## Capturas
 
@@ -79,6 +80,19 @@ Abrir el panel de grupos:
 cargo run --release -- --archivo assets/practica5.json --panel grupos
 ```
 
+Abrir la Práctica 6 (dos circuitos):
+
+```bash
+cargo run --release -- --archivo assets/practica6_rumbo.json
+cargo run --release -- --archivo assets/practica6_celular.json
+```
+
+Regenerar esos dos archivos (verifica la tabla de verdad antes de escribirlos):
+
+```bash
+python3 tools/gen_practica6.py
+```
+
 Si no indicas `--archivo`, la app usa `~/CircuitosIA/circuito_actual.json` y lo crea si no existe.
 
 ## Uso rápido
@@ -86,7 +100,7 @@ Si no indicas `--archivo`, la app usa `~/CircuitosIA/circuito_actual.json` y lo 
 1. Elige una pieza en el panel izquierdo y haz clic en los orificios.
 2. Para un cable, haz clic en el primer orificio y luego en el segundo.
 3. Para un chip, haz clic en la columna del pin 1 (fila e o f).
-4. Para el display, haz clic en el orificio del terminal `a`; los 8 terminales se colocan hacia la derecha.
+4. Para el display de 1.2", haz clic en el orificio del pin `g` (arriba a la izquierda): el módulo coloca sus 10 pines en dos filas (g f común a b arriba; e d común c dp abajo).
 5. Las etiquetas con el mismo nombre conectan redes entre placas.
 6. En la pestaña **Grupos**, crea carpetas como `Cables/rojo`, mueve la selección, oculta o enfoca un grupo, y usa **Reordenar por grupos**.
 
@@ -137,6 +151,29 @@ cargo run --release -- --instrucciones assets/practica5.json
 
 # Ver la guía paso a paso en la app
 cargo run --release -- --archivo assets/practica5.json --pestana armado
+```
+
+## Práctica 6
+
+Dos circuitos con lógica de 5 V sobre 3 protoboards de 60 columnas cada uno:
+
+| Archivo | Circuito | CI |
+|---|---|---|
+| `assets/practica6_rumbo.json` | Rumbo de navegación (A=N, B=S, C=E, D=O) | 4 × 74HC08, 3 × 74HC32, 1 × 74HC04 |
+| `assets/practica6_celular.json` | Decodificador BCD 6864247720 | 3 × 74HC08, 5 × 74HC32, 1 × 74HC04 |
+
+Los ocho rumbos válidos y los diez dígitos están verificados en `assets/checklist_rumbo.csv` y `assets/checklist_celular.csv`; las combinaciones inválidas del rumbo encienden a, d, e, f, g (la app muestra «E») y las del BCD quedan como no importa.
+
+```bash
+# Simulación del estado actual (incluye la tabla de verdad de 16 filas)
+cargo run --release -- --simular assets/practica6_rumbo.json
+cargo run --release -- --simular assets/practica6_celular.json
+
+# Instrucciones de armado
+cargo run --release -- --instrucciones assets/practica6_rumbo.json
+
+# Regenerar los JSON (comprueba la tabla antes de escribir)
+python3 tools/gen_practica6.py
 ```
 
 ## Formato de circuito
@@ -215,7 +252,7 @@ cargo test
 cargo build --release
 ```
 
-La suite incluye simulación de compuertas, displays, etiquetas, conversión cables/etiquetas, grupos, rehacer, rutas ortogonales y los 32 casos de la Práctica 5.
+La suite incluye simulación de compuertas, displays, etiquetas, conversión cables/etiquetas, grupos, rehacer, rutas ortogonales, los 32 casos de la Práctica 5 y los 16 de cada circuito de la Práctica 6.
 
 ## Estructura del proyecto
 
@@ -228,7 +265,7 @@ src/route.rs   trazado ortogonal de cables con A*
 src/instr.rs   instrucciones de armado paso a paso
 src/mcp.rs     servidor MCP para agentes
 assets/        circuitos y datos de ejemplo
-tools/         generador reproducible de la Práctica 5
+tools/         generadores reproducibles de las Prácticas 5 y 6
 docs/          resumen del proceso y capturas
 ```
 

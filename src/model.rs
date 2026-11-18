@@ -307,12 +307,12 @@ impl ChipInfo {
             .enumerate()
             .map(|(i, (ins, out))| {
                 let ins: Vec<String> = ins.iter().map(|p| p.to_string()).collect();
-                format!(
-                    "compuerta {}: entradas {} y salida {}",
-                    i + 1,
-                    ins.join(" y "),
-                    out
-                )
+                let ent = if ins.len() == 1 {
+                    format!("entrada {}", ins[0])
+                } else {
+                    format!("entradas {}", ins.join(" y "))
+                };
+                format!("compuerta {}: {} → salida {}", i + 1, ent, out)
             })
             .collect::<Vec<_>>()
             .join("; ")
@@ -334,6 +334,29 @@ pub fn chip_pin_hole(board: u8, col: i32, pin: u8) -> Hole {
             col: col + 14 - pin as i32,
         }
     }
+}
+
+/// Orificios del display de 1.2" (10 pines) a partir del pin g (arriba a la izquierda).
+/// Orden lógico del vector: a, b, c, d, e, f, g, común 1, común 2, dp.
+/// Fila de arriba: g f común a b. Fila de abajo (4 filas más abajo): e d común c dp.
+pub fn display_pin_holes(board: u8, row: u8, col: i32) -> Vec<Hole> {
+    let h = |r: u8, c: i32| Hole::Main {
+        board,
+        row: r,
+        col: c,
+    };
+    vec![
+        h(row, col + 3),     // a
+        h(row, col + 4),     // b
+        h(row + 4, col + 3), // c
+        h(row + 4, col + 1), // d
+        h(row + 4, col),     // e
+        h(row, col + 1),     // f
+        h(row, col),         // g
+        h(row, col + 2),     // común 1
+        h(row + 4, col + 2), // común 2
+        h(row + 4, col + 4), // dp
+    ]
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
@@ -516,9 +539,35 @@ impl Comp {
             return Ok((1..=14).map(|p| chip_pin_hole(board, col, p)).collect());
         }
         if self.tipo == Tipo::Display {
+            if self.pines.len() == 1 {
+                let (board, row, col) = match Hole::parse(&self.pines[0]) {
+                    Some(Hole::Main { board, row, col }) => (board, row, col),
+                    _ => {
+                        return Err(format!(
+                        "{}: '{}' no sirve para el pin g; usa un orificio de la placa, p. ej. c20",
+                        self.id, self.pines[0]
+                    ))
+                    }
+                };
+                if col + 4 > MAX_COLS {
+                    return Err(format!(
+                        "{}: el display no cabe; el pin g debe estar en la columna {} o antes",
+                        self.id,
+                        MAX_COLS - 4
+                    ));
+                }
+                if row + 4 > 9 {
+                    return Err(format!(
+                        "{}: el display no cabe; el pin g debe estar en la fila {} o antes",
+                        self.id,
+                        (b'a' + 5) as char
+                    ));
+                }
+                return Ok(display_pin_holes(board, row, col));
+            }
             if self.pines.len() != 8 {
                 return Err(format!(
-                    "{}: un display necesita exactamente 8 pines (a, b, c, d, e, f, g y común)",
+                    "{}: un display necesita 1 orificio (pin g del módulo de 10 pines) u 8 pines (modelo antiguo: a, b, c, d, e, f, g y común)",
                     self.id
                 ));
             }
@@ -580,17 +629,34 @@ impl Comp {
                 Some(info) => format!("pin {}: {}", i + 1, info.pin_fn(i as u8 + 1)),
                 None => format!("pin {}", i + 1),
             },
-            Tipo::Display => [
-                "segmento a",
-                "segmento b",
-                "segmento c",
-                "segmento d",
-                "segmento e",
-                "segmento f",
-                "segmento g",
-                "común (cátodo, -)",
-            ][i.min(7)]
-            .into(),
+            Tipo::Display => {
+                let l: &[&str] = if self.pines.len() != 8 {
+                    &[
+                        "segmento a",
+                        "segmento b",
+                        "segmento c",
+                        "segmento d",
+                        "segmento e",
+                        "segmento f",
+                        "segmento g",
+                        "común 1 (cátodo, -)",
+                        "común 2 (cátodo, -)",
+                        "punto decimal (dp)",
+                    ]
+                } else {
+                    &[
+                        "segmento a",
+                        "segmento b",
+                        "segmento c",
+                        "segmento d",
+                        "segmento e",
+                        "segmento f",
+                        "segmento g",
+                        "común (cátodo, -)",
+                    ]
+                };
+                l[i.min(l.len() - 1)].into()
+            }
             Tipo::Etiqueta => format!("red «{}»", self.red()),
             Tipo::Cable => format!("extremo {}", i + 1),
             _ => format!("pata {}", i + 1),
@@ -838,6 +904,8 @@ pub fn parse_text(s: &str) -> Result<Circuito, String> {
 // ---------- ejemplos ----------
 
 const PRACTICA5_JSON: &str = include_str!("../assets/practica5.json");
+const PRACTICA6_RUMBO_JSON: &str = include_str!("../assets/practica6_rumbo.json");
+const PRACTICA6_CELULAR_JSON: &str = include_str!("../assets/practica6_celular.json");
 
 pub fn ejemplos() -> Vec<Circuito> {
     use Tipo::*;
@@ -897,8 +965,10 @@ pub fn ejemplos() -> Vec<Circuito> {
             ..Default::default()
         },
     ];
-    if let Ok(p) = serde_json::from_str::<Circuito>(PRACTICA5_JSON) {
-        v.push(p);
+    for json in [PRACTICA5_JSON, PRACTICA6_RUMBO_JSON, PRACTICA6_CELULAR_JSON] {
+        if let Ok(p) = serde_json::from_str::<Circuito>(json) {
+            v.push(p);
+        }
     }
     v
 }
@@ -956,10 +1026,14 @@ cerrado / carpeta)
     (mismo patillaje y misma función a 5 V).
   Modelos:
 {chips}
-- {{"id":"DS1","tipo":"display","pines":["h20","h22","h24","h26","h28","h30","h32","h34"]}}
-    Display de 7 segmentos de cátodo común. Los 8 pines van en orden a, b, c, d, e, f, g,
-    común. El común va a GND. Cada segmento necesita su resistencia (470 ohmios) entre
-    el pin del segmento y la salida que lo controla.
+- {{"id":"DS1","tipo":"display","pines":["c20"]}}
+    Display de 7 segmentos de 1.2 pulgadas, cátodo común, 10 pines como el módulo real.
+    pines = [orificio del pin g, arriba a la izquierda]. La fila de arriba es g, f, común,
+    a, b en las columnas N..N+4; la de abajo es e, d, común, c, dp cuatro filas más abajo.
+    Los dos comunes van a GND (están unidos por dentro). Cada segmento necesita su
+    resistencia (470 ohmios) entre el pin del segmento y la salida que lo controla.
+    El punto decimal (dp) puede quedar sin conectar.
+    Tambien se acepta el modelo antiguo de 8 pines en una fila: a, b, c, d, e, f, g, común.
 - {{"id":"L1","tipo":"etiqueta","nombre":"p1","pines":["g12"]}}
     Etiqueta de red: una sola pata. Dos etiquetas con el MISMO nombre quedan conectadas
     aunque estén en placas distintas. Úsalas para las redes lógicas y para GND.
