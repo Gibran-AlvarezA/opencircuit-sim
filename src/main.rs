@@ -1,4 +1,6 @@
+mod bom;
 mod draw;
+mod erc;
 mod instr;
 mod mcp;
 mod model;
@@ -10,7 +12,7 @@ use egui::{Color32, RichText, Sense};
 use model::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const AYUDA: &str = "OpenCircuit - simulador de circuitos
 
@@ -21,6 +23,7 @@ Uso:
   opencircuit --guia                  muestra el formato de circuitos
   opencircuit --simular <x.json>      simula un circuito y muestra el resultado
   opencircuit --instrucciones <x.json>  instrucciones de armado en Markdown
+  opencircuit --bom <x.json>          lista de materiales en CSV
   opencircuit --screenshot <x.png>    guarda una captura de la ventana y sale
   opencircuit --pestana armado|ia     abre en esa pestaña
   opencircuit --paso <n>              abre en el paso n de las instrucciones
@@ -69,6 +72,10 @@ fn main() {
             "{}",
             instr::markdown(&c.nombre, &instr::instrucciones(&c, &s, t.as_ref()))
         );
+        return;
+    }
+    if let Some(p) = get("--bom") {
+        print!("{}", bom::csv(&leer(p)));
         return;
     }
     let shot = get("--screenshot").map(PathBuf::from);
@@ -290,6 +297,11 @@ struct App {
     file: PathBuf,
     mtime: Option<SystemTime>,
     next_poll: f64,
+    autosave_next: f64,
+    autosave_pending: Option<Circuito>,
+    conflict: Option<Circuito>,
+    conflict_diff: Option<String>,
+    mods_desde_snapshot: usize,
     status: String,
     pegar: String,
     pegar_msg: String,
@@ -299,6 +311,87 @@ struct App {
 
 fn mtime(p: &Path) -> Option<SystemTime> {
     std::fs::metadata(p).and_then(|m| m.modified()).ok()
+}
+
+fn autosave_path(file: &Path) -> PathBuf {
+    let name = file
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("circuito.json");
+    file.with_file_name(format!(".{name}.autosave.json"))
+}
+
+fn snapshot_dir(file: &Path) -> PathBuf {
+    file.parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(".opencircuit_snapshots")
+}
+
+fn rotar_snapshots(dir: &Path, keep: usize) -> Result<usize, String> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .collect();
+    v.sort();
+    let mut quitados = 0;
+    while v.len() > keep {
+        std::fs::remove_file(v.remove(0)).map_err(|e| e.to_string())?;
+        quitados += 1;
+    }
+    Ok(quitados)
+}
+
+fn guardar_copia(file: &Path, c: &Circuito) -> Result<PathBuf, String> {
+    let dir = snapshot_dir(file);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let n = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let path = dir.join(format!("snapshot-{n:020}.json"));
+    guardar(&path, c)?;
+    rotar_snapshots(&dir, 20)?;
+    Ok(path)
+}
+
+fn resumen_diferencias(local: &Circuito, externo: &Circuito) -> String {
+    let ids =
+        |c: &Circuito| -> HashSet<String> { c.componentes.iter().map(|x| x.id.clone()).collect() };
+    let (a, b) = (ids(local), ids(externo));
+    let solo_local: Vec<&str> = a
+        .iter()
+        .filter(|id| !b.contains(*id))
+        .map(String::as_str)
+        .take(6)
+        .collect();
+    let solo_externo: Vec<&str> = b
+        .iter()
+        .filter(|id| !a.contains(*id))
+        .map(String::as_str)
+        .take(6)
+        .collect();
+    let mut partes = Vec::new();
+    if !solo_local.is_empty() {
+        partes.push(format!("Solo en tu versión: {}.", solo_local.join(", ")));
+    }
+    if !solo_externo.is_empty() {
+        partes.push(format!("Solo en el archivo: {}.", solo_externo.join(", ")));
+    }
+    if solo_local.is_empty() && solo_externo.is_empty() {
+        let cambiadas = local
+            .componentes
+            .iter()
+            .filter(|x| externo.find(&x.id).is_some_and(|y| **x != *y))
+            .count();
+        partes.push(format!("{cambiadas} pieza(s) con cambios."));
+    }
+    if partes.is_empty() {
+        "Las versiones son equivalentes.".into()
+    } else {
+        partes.join(" ")
+    }
 }
 
 fn layer(t: Tipo) -> u8 {
@@ -353,6 +446,11 @@ impl App {
             mtime: mtime(&file),
             file,
             next_poll: 0.0,
+            autosave_next: 0.0,
+            autosave_pending: None,
+            conflict: None,
+            conflict_diff: None,
+            mods_desde_snapshot: 0,
             status: "Listo. Pasa el ratón por la protoboard para medir voltajes; haz clic en un interruptor para cambiarlo.".into(),
             pegar: String::new(),
             pegar_msg: String::new(),
@@ -361,7 +459,22 @@ impl App {
         };
         app.recompute();
         App::ordenar_cables(&mut app.circ);
-        if fresh {
+        if app.shot.is_none() && app.file.exists() {
+            let _ = guardar_copia(&app.file, &app.circ);
+            let auto = autosave_path(&app.file);
+            if let (Some(ma), Some(mf)) = (mtime(&auto), mtime(&app.file)) {
+                if ma > mf {
+                    if let Ok(c) = cargar(&auto) {
+                        if c != app.circ {
+                            app.autosave_pending = Some(c);
+                        } else {
+                            let _ = std::fs::remove_file(&auto);
+                        }
+                    }
+                }
+            }
+        }
+        if fresh && app.autosave_pending.is_none() {
             app.save();
         }
         app
@@ -431,6 +544,29 @@ impl App {
         f(&mut self.circ);
         self.recompute();
         self.save();
+        self.mods_desde_snapshot += 1;
+        if self.mods_desde_snapshot >= 25 && self.shot.is_none() {
+            self.mods_desde_snapshot = 0;
+            let _ = guardar_copia(&self.file, &self.circ);
+        }
+    }
+
+    fn autosave(&mut self, ctx: &egui::Context) {
+        if self.shot.is_some() {
+            return;
+        }
+        let now = ctx.input(|i| i.time);
+        if self.autosave_next == 0.0 {
+            self.autosave_next = now + 30.0;
+            return;
+        }
+        if now < self.autosave_next {
+            return;
+        }
+        self.autosave_next = now + 30.0;
+        if let Err(e) = guardar(&autosave_path(&self.file), &self.circ) {
+            self.status = format!("No pude guardar el autosave: {e}");
+        }
     }
 
     fn set_circuit(&mut self, c: Circuito, msg: String) {
@@ -708,15 +844,118 @@ impl App {
         self.mtime = m;
         match cargar(&self.file) {
             Ok(c) if c != self.circ => {
-                self.undo.push(std::mem::replace(&mut self.circ, c));
-                self.redo.clear();
-                Self::ordenar_cables(&mut self.circ);
-                self.recompute();
-                self.status =
-                    "El circuito se actualizó desde el archivo compartido (agente de IA).".into();
+                if self.conflict.is_none() {
+                    self.status =
+                        "El archivo cambió por fuera; elige qué versión conservar.".into();
+                }
+                self.conflict = Some(c);
+                self.conflict_diff = None;
             }
-            Ok(_) => {}
+            Ok(_) => {
+                self.conflict = None;
+                self.conflict_diff = None;
+            }
             Err(e) => self.status = format!("El archivo compartido tiene un error: {e}"),
+        }
+    }
+
+    fn recovery_window(&mut self, ctx: &egui::Context) {
+        let Some(c) = self.autosave_pending.clone() else {
+            return;
+        };
+        let mut accion = 0;
+        egui::Window::new("Cambios sin guardar")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("Encontré una copia automática más reciente que el archivo.");
+                ui.label(
+                    RichText::new("Puedes recuperarla o quedarte con la versión del archivo.")
+                        .small()
+                        .color(MUTED),
+                );
+                ui.horizontal(|ui| {
+                    if ui.button("Recuperar").clicked() {
+                        accion = 1;
+                    }
+                    if ui.button("Descartar").clicked() {
+                        accion = 2;
+                    }
+                });
+            });
+        match accion {
+            1 => {
+                let _ = guardar_copia(&self.file, &c);
+                let _ = std::fs::remove_file(autosave_path(&self.file));
+                self.autosave_pending = None;
+                self.set_circuit(c, "Cambios recuperados de la copia automática.".into());
+            }
+            2 => {
+                let _ = std::fs::remove_file(autosave_path(&self.file));
+                self.autosave_pending = None;
+                match guardar(&self.file, &self.circ) {
+                    Ok(()) => {
+                        self.mtime = mtime(&self.file);
+                        self.status = "Copia automática descartada.".into();
+                    }
+                    Err(e) => self.status = format!("No pude guardar el circuito: {e}"),
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn conflict_window(&mut self, ctx: &egui::Context) {
+        let Some(c) = self.conflict.clone() else {
+            return;
+        };
+        let mut accion = 0;
+        egui::Window::new("El archivo cambió por fuera")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "{} cambió mientras la app estaba abierta.",
+                    self.file.display()
+                ));
+                if let Some(d) = &self.conflict_diff {
+                    ui.label(RichText::new(d).small().color(WARN));
+                }
+                ui.horizontal(|ui| {
+                    if ui.button("Recargar").clicked() {
+                        accion = 1;
+                    }
+                    if ui.button("Conservar el mío").clicked() {
+                        accion = 2;
+                    }
+                    if ui.button("Ver diferencias").clicked() {
+                        accion = 3;
+                    }
+                });
+            });
+        match accion {
+            1 => {
+                let _ = guardar_copia(&self.file, &self.circ);
+                self.conflict = None;
+                self.conflict_diff = None;
+                self.set_circuit(c, "Recargado desde el archivo compartido.".into());
+            }
+            2 => {
+                let _ = guardar_copia(&self.file, &c);
+                match guardar(&self.file, &self.circ) {
+                    Ok(()) => {
+                        self.mtime = mtime(&self.file);
+                        self.conflict = None;
+                        self.conflict_diff = None;
+                        self.status = "Conservé tu versión; la versión externa quedó en una copia de seguridad.".into();
+                    }
+                    Err(e) => self.status = format!("No pude conservar tu versión: {e}"),
+                }
+            }
+            3 => self.conflict_diff = Some(resumen_diferencias(&self.circ, &c)),
+            _ => {}
         }
     }
 
@@ -1967,6 +2206,74 @@ impl App {
     }
 
     fn state_panel(&mut self, ui: &mut egui::Ui) {
+        let issues = erc::check(&self.circ, &self.sim);
+        let errores = issues
+            .iter()
+            .filter(|i| i.severity == erc::Severity::Error)
+            .count();
+        let avisos = issues
+            .iter()
+            .filter(|i| i.severity == erc::Severity::Warn)
+            .count();
+        section(ui, "Reglas");
+        ui.horizontal(|ui| {
+            if errores > 0 {
+                dot(ui, DANGER);
+                ui.label(
+                    RichText::new(format!("{errores} error(es)"))
+                        .small()
+                        .strong()
+                        .color(DANGER),
+                );
+            }
+            if avisos > 0 {
+                dot(ui, WARN);
+                ui.label(
+                    RichText::new(format!("{avisos} aviso(s)"))
+                        .small()
+                        .strong()
+                        .color(WARN),
+                );
+            }
+            if issues.is_empty() {
+                dot(ui, SUCCESS);
+                ui.label(
+                    RichText::new("Sin problemas detectados")
+                        .small()
+                        .strong()
+                        .color(SUCCESS),
+                );
+            }
+        });
+        for it in &issues {
+            let color = match it.severity {
+                erc::Severity::Error => DANGER,
+                erc::Severity::Warn => WARN,
+            };
+            let texto = format!("{}: {}", it.severity.label(), it.msg);
+            let r = ui.add(
+                egui::Label::new(RichText::new(texto).small().color(color))
+                    .sense(Sense::click())
+                    .wrap(),
+            );
+            if r.clicked() {
+                self.sel = it.ids.iter().cloned().collect();
+                self.selected = it.ids.first().cloned();
+                self.centrar_ids(&it.ids);
+                self.tab = Tab::Protoboard;
+                let lugar = it
+                    .ids
+                    .first()
+                    .cloned()
+                    .or_else(|| it.holes.first().map(|h| h.name()));
+                self.status = match lugar {
+                    Some(x) => format!("{x} · {}", it.msg),
+                    None => it.msg.clone(),
+                };
+            }
+        }
+        ui.separator();
+
         if !self.sel.is_empty() {
             let ids: Vec<String> = self
                 .circ
@@ -2202,24 +2509,6 @@ impl App {
             ui.separator();
         }
 
-        section(ui, "Estado");
-        let (estado_color, resumen) = if !self.sim.errors.is_empty() {
-            (DANGER, format!("{} error(es)", self.sim.errors.len()))
-        } else if !self.sim.warnings.is_empty() {
-            (WARN, format!("{} aviso(s)", self.sim.warnings.len()))
-        } else {
-            (SUCCESS, "Sin problemas detectados".to_string())
-        };
-        ui.horizontal(|ui| {
-            dot(ui, estado_color);
-            ui.label(RichText::new(resumen).color(estado_color).strong());
-        });
-        for e in &self.sim.errors {
-            ui.label(RichText::new(format!("ERROR: {e}")).small().color(DANGER));
-        }
-        for w in &self.sim.warnings {
-            ui.label(RichText::new(format!("Aviso: {w}")).small().color(WARN));
-        }
         if !self.sim.leds.is_empty() {
             section(ui, "LEDs");
             for l in &self.sim.leds {
@@ -2396,6 +2685,34 @@ impl App {
             .resizable(false)
             .exact_width(390.0)
             .show(ctx, |ui| {
+                let materiales = bom::lineas(&self.circ);
+                let mut exportar_bom = false;
+                egui::CollapsingHeader::new("Materiales")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        egui::Grid::new("bom").striped(true).show(ui, |ui| {
+                            ui.label(RichText::new("Grupo").strong().small());
+                            ui.label(RichText::new("Detalle").strong().small());
+                            ui.label(RichText::new("Cant.").strong().small());
+                            ui.end_row();
+                            for l in &materiales {
+                                ui.label(RichText::new(l.grupo).small().color(MUTED));
+                                ui.label(RichText::new(&l.detalle).small());
+                                ui.label(RichText::new(l.cantidad.to_string()).small());
+                                ui.end_row();
+                            }
+                        });
+                        if ui.button("Exportar materiales.csv").clicked() {
+                            exportar_bom = true;
+                        }
+                    });
+                if exportar_bom {
+                    let path = self.file.with_file_name("materiales.csv");
+                    self.status = match std::fs::write(&path, bom::csv(&self.circ)) {
+                        Ok(()) => format!("Materiales guardados en {}", path.display()),
+                        Err(e) => format!("No pude guardar los materiales: {e}"),
+                    };
+                }
                 ui.label(
                     RichText::new(format!("Paso {} de {}", self.paso + 1, n))
                         .color(Color32::from_rgb(140, 200, 255)),
@@ -2448,6 +2765,12 @@ impl App {
                     ) {
                         Ok(()) => format!("Instrucciones guardadas en {}", path.display()),
                         Err(e) => format!("No pude guardar: {e}"),
+                    };
+                }
+                if ui.button("Guardar copia de seguridad").clicked() {
+                    self.status = match guardar_copia(&self.file, &self.circ) {
+                        Ok(p) => format!("Copia guardada en {}", p.display()),
+                        Err(e) => format!("No pude guardar la copia: {e}"),
                     };
                 }
             });
@@ -2554,6 +2877,7 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_file(ctx);
+        self.autosave(ctx);
         if self.tab == Tab::Armado && self.paso != self.paso_visto && self.ultimo_rect.is_some() {
             self.paso_visto = self.paso;
             self.centrar_paso();
@@ -2774,6 +3098,14 @@ impl eframe::App for App {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| self.ia_panel(ui));
                 });
+            }
+        }
+
+        if self.shot.is_none() {
+            if self.autosave_pending.is_some() {
+                self.recovery_window(ctx);
+            } else {
+                self.conflict_window(ctx);
             }
         }
 
@@ -3268,5 +3600,92 @@ mod tests {
             );
         }
         assert!(alguno, "ningún cable se pudo rutear");
+    }
+
+    #[test]
+    fn snapshots_se_rotan_a_veinte() {
+        let dir = temp("snap").with_extension("d");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..25 {
+            std::fs::write(dir.join(format!("snapshot-{i:020}.json")), "{}").unwrap();
+        }
+        assert_eq!(rotar_snapshots(&dir, 20).unwrap(), 5);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 20);
+        assert!(!dir.join(format!("snapshot-{:020}.json", 0)).exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn autosave_se_escribe_y_se_lee() {
+        let f = temp("auto");
+        let auto = autosave_path(&f);
+        let _ = std::fs::remove_file(&auto);
+        assert!(auto.file_name().unwrap().to_str().unwrap().starts_with('.'));
+        let c = ejemplos()[0].clone();
+        guardar(&auto, &c).unwrap();
+        assert_eq!(cargar(&auto).unwrap(), c);
+        let _ = std::fs::remove_file(&auto);
+    }
+
+    #[test]
+    fn conflicto_resume_piezas_agregadas_y_quitadas() {
+        let a = ejemplos()[0].clone();
+        let mut b = a.clone();
+        b.componentes.retain(|x| x.id != "D1");
+        let s = resumen_diferencias(&a, &b);
+        assert!(s.contains("D1"), "{s}");
+
+        let mut c = a.clone();
+        if let Some(x) = c.componentes.iter_mut().find(|x| x.id == "R1") {
+            x.valor = Some(999.0);
+        }
+        let s2 = resumen_diferencias(&a, &c);
+        assert!(s2.contains("1 pieza"), "{s2}");
+    }
+
+    #[test]
+    fn cambio_externo_no_pisa_la_version_local() {
+        let f = temp("conflicto");
+        let _ = std::fs::remove_file(&f);
+        let a = ejemplos()[0].clone();
+        guardar(&f, &a).unwrap();
+        let mut app = App::new(f.clone(), Some(f.clone()));
+        let antes = app.circ.clone();
+        let mut b = a.clone();
+        b.nombre = "otro".into();
+        b.componentes.retain(|x| x.id != "D1");
+        guardar(&f, &b).unwrap();
+        app.poll_file(&egui::Context::default());
+        assert!(app.conflict.is_some());
+        assert_eq!(app.circ, antes, "no recarga en silencio");
+        let s = resumen_diferencias(&app.circ, app.conflict.as_ref().unwrap());
+        assert!(s.contains("D1"), "{s}");
+        let _ = std::fs::remove_file(&f);
+    }
+
+    #[test]
+    fn autosave_mas_nuevo_se_ofrece_al_abrir() {
+        let f = temp("recuperar");
+        let auto = autosave_path(&f);
+        let _ = std::fs::remove_file(&f);
+        let _ = std::fs::remove_file(&auto);
+        let a = ejemplos()[0].clone();
+        guardar(&f, &a).unwrap();
+        let mut b = a.clone();
+        b.nombre = "recuperado".into();
+        guardar(&auto, &b).unwrap();
+        let fh = std::fs::OpenOptions::new().write(true).open(&f).unwrap();
+        fh.set_times(
+            std::fs::FileTimes::new().set_modified(SystemTime::now() - Duration::from_secs(10)),
+        )
+        .unwrap();
+        let app = App::new(f.clone(), None);
+        assert_eq!(
+            app.autosave_pending.as_ref().map(|c| c.nombre.as_str()),
+            Some("recuperado")
+        );
+        let _ = std::fs::remove_file(&auto);
+        let _ = std::fs::remove_file(&f);
     }
 }

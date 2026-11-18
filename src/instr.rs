@@ -48,7 +48,7 @@ fn donde(h: Hole) -> String {
     format!("{} ({})", h.name(), h.describe())
 }
 
-fn largo_mm(c: &Circuito, a: Hole, b: Hole) -> i32 {
+pub(crate) fn largo_mm(c: &Circuito, a: Hole, b: Hole) -> i32 {
     let ((x1, y1), (x2, y2)) = (crate::route::pos(c, a), crate::route::pos(c, b));
     let mm = ((x1 - x2).hypot(y1 - y2) * 2.54 + 10.0) as i32;
     (mm + 4) / 5 * 5

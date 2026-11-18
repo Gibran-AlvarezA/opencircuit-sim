@@ -19,6 +19,9 @@
 - Trazado ortogonal de cables que esquiva piezas y respeta los pasillos.
 - Grupos de cables: crear carpetas, mover piezas, ocultar, enfocar, buscar y reordenar con distinta separación.
 - Instrucciones de armado paso a paso y exportación a Markdown.
+- Verificación eléctrica (ERC): LED sin resistencia, chip sin alimentación, entradas al aire, cortos, salidas en conflicto y display sin común; cada aviso se centra al hacer clic.
+- Lista de materiales agrupada, con exportación a CSV.
+- Autosave, copias de seguridad y aviso cuando otro programa cambia el archivo compartido.
 - Deshacer, rehacer, selección múltiple y atajos de teclado.
 - Integración MCP para Claude Desktop, Claude Code, Cursor y otros agentes.
 - Práctica 5 incluida: detector 2 de 5 con 3 placas, 12 CI, display, LEDs y 32 combinaciones.
@@ -124,8 +127,10 @@ Si no indicas `--archivo`, la app usa `~/CircuitosIA/circuito_actual.json` y lo 
 | `--archivo <ruta>` | Archivo de circuito compartido |
 | `--simular <ruta>` | Simula y muestra el estado actual |
 | `--instrucciones <ruta>` | Genera las instrucciones de armado en Markdown |
+| `--bom <ruta>` | Lista de materiales en CSV por stdout |
 | `--guia` | Muestra el formato JSON de circuitos |
 | `--screenshot <png>` | Guarda una captura y sale |
+| `--paso <n>` | Abre en el paso n de las instrucciones |
 | `--pestana protoboard\|armado\|ia` | Pestaña inicial |
 | `--panel piezas\|grupos` | Panel lateral inicial |
 | `--grupo <carpeta>` | Enfoca una carpeta al abrir |
