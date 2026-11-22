@@ -19,8 +19,8 @@ PINS = {
 }
 
 RUMBO = {
-    "archivo": "practica6_rumbo.json",
-    "nombre": "Práctica 6 — rumbo de navegación (8 CI)",
+    "archivo": "Practica 6 - Daniel Gibran Alvarez Armienta - rumbo.json",
+    "nombre": "Practica 6 - Daniel Gibran Alvarez Armienta - rumbo",
     "logic": [
         ("na", "NOT", ("A",)), ("nb", "NOT", ("B",)),
         ("nc", "NOT", ("C",)), ("nd", "NOT", ("D",)),
@@ -68,8 +68,8 @@ RUMBO = {
 }
 
 CELULAR = {
-    "archivo": "practica6_celular.json",
-    "nombre": "Práctica 6 — decodificador BCD del celular 6864247720 (9 CI)",
+    "archivo": "Practica 6 - Daniel Gibran Alvarez Armienta - celular.json",
+    "nombre": "Practica 6 - Daniel Gibran Alvarez Armienta - celular",
     "logic": [
         ("nb", "NOT", ("B",)), ("nc", "NOT", ("C",)), ("nd", "NOT", ("D",)),
         ("t1", "AND", ("B", "D")), ("t2", "AND", ("nb", "nd")),

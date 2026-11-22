@@ -13,9 +13,10 @@
 ## Características
 
 - Protoboard de 1 a 3 placas, 30 o 60 columnas, con rieles de alimentación.
-- Fuente de 5 V, resistencias, LEDs, interruptores, display de 7 segmentos, cables y etiquetas de red.
-- Chips 74HC08 (AND), 74HC32 (OR) y 74HC04 (NOT), con alias 7408/7432/7404.
-- Simulación nodal: voltajes, corriente de LEDs, display y tabla de verdad.
+- Fuente de 5 V, resistencias, LEDs, interruptores, potenciómetro, pulsador momentáneo, display de 7 segmentos, cables y etiquetas de red.
+- Chips DIP-14: 74HC08, 74HC32, 74HC86, 74HC00, 74HC02 y 74HC04 (alias 7408/7432/7486/7400/7402/7404).
+- Chips DIP-16: 74138, 74283, 7483, 7448, 74151, 74157 y 7485.
+- Simulación nodal: voltajes, corriente de LEDs, display y tabla de verdad; el potenciómetro y el pulsador usan el mismo solver.
 - Trazado ortogonal de cables que esquiva piezas y respeta los pasillos.
 - Grupos de cables: crear carpetas, mover piezas, ocultar, enfocar, buscar y reordenar con distinta separación.
 - Instrucciones de armado paso a paso y exportación a Markdown.
@@ -26,6 +27,9 @@
 - Integración MCP para Claude Desktop, Claude Code, Cursor y otros agentes.
 - Práctica 5 incluida: detector 2 de 5 con 3 placas, 12 CI, display, LEDs y 32 combinaciones.
 - Práctica 6 incluida: rumbo de navegación (8 CI) y decodificador BCD del celular (9 CI), 3 placas cada uno y 16 combinaciones.
+- Práctica 7 incluida: decodificador 74138 con Σm(1,2) y sumador 74283 + 7448 + display, con 8 y 256 combinaciones verificadas.
+- Proyecto final incluido: sumador-restador de 4 bits en BCD con conversión BCD↔binario, magnitud, signo y 512 combinaciones verificadas.
+- Ejemplos de 74151, 74157, 7485, potenciómetro, pulsador y divisor resistivo.
 
 ## Capturas
 
@@ -86,8 +90,8 @@ cargo run --release -- --archivo assets/practica5.json --panel grupos
 Abrir la Práctica 6 (dos circuitos):
 
 ```bash
-cargo run --release -- --archivo assets/practica6_rumbo.json
-cargo run --release -- --archivo assets/practica6_celular.json
+cargo run --release -- --archivo "assets/Practica 6 - Daniel Gibran Alvarez Armienta - rumbo.json"
+cargo run --release -- --archivo "assets/Practica 6 - Daniel Gibran Alvarez Armienta - celular.json"
 ```
 
 Regenerar esos dos archivos (verifica la tabla de verdad antes de escribirlos):
@@ -164,22 +168,73 @@ Dos circuitos con lógica de 5 V sobre 3 protoboards de 60 columnas cada uno:
 
 | Archivo | Circuito | CI |
 |---|---|---|
-| `assets/practica6_rumbo.json` | Rumbo de navegación (A=N, B=S, C=E, D=O) | 4 × 74HC08, 3 × 74HC32, 1 × 74HC04 |
-| `assets/practica6_celular.json` | Decodificador BCD 6864247720 | 3 × 74HC08, 5 × 74HC32, 1 × 74HC04 |
+| `assets/Practica 6 - Daniel Gibran Alvarez Armienta - rumbo.json` | Rumbo de navegación (A=N, B=S, C=E, D=O) | 4 × 74HC08, 3 × 74HC32, 1 × 74HC04 |
+| `assets/Practica 6 - Daniel Gibran Alvarez Armienta - celular.json` | Decodificador BCD 6864247720 | 3 × 74HC08, 5 × 74HC32, 1 × 74HC04 |
 
 Los ocho rumbos válidos y los diez dígitos están verificados en `assets/checklist_rumbo.csv` y `assets/checklist_celular.csv`; las combinaciones inválidas del rumbo encienden a, d, e, f, g (la app muestra «E») y las del BCD quedan como no importa.
 
 ```bash
 # Simulación del estado actual (incluye la tabla de verdad de 16 filas)
-cargo run --release -- --simular assets/practica6_rumbo.json
-cargo run --release -- --simular assets/practica6_celular.json
+cargo run --release -- --simular "assets/Practica 6 - Daniel Gibran Alvarez Armienta - rumbo.json"
+cargo run --release -- --simular "assets/Practica 6 - Daniel Gibran Alvarez Armienta - celular.json"
 
 # Instrucciones de armado
-cargo run --release -- --instrucciones assets/practica6_rumbo.json
+cargo run --release -- --instrucciones "assets/Practica 6 - Daniel Gibran Alvarez Armienta - rumbo.json"
 
 # Regenerar los JSON (comprueba la tabla antes de escribir)
 python3 tools/gen_practica6.py
 ```
+
+## Práctica 7
+
+Dos circuitos con CI MSI sobre 3 protoboards de 60 columnas:
+
+| Archivo | Circuito | CI |
+|---|---|---|
+| `assets/Practica 7 - Daniel Gibran Alvarez Armienta - decodificador.json` | 74138 con F = Σm(1,2) = A'·(B ⊕ C) | 74138 + 74HC00 |
+| `assets/Practica 7 - Daniel Gibran Alvarez Armienta - sumador.json` | Sumador de 4 bits, display BCD y acarreo | 74283 + 7448 + 74HC00 |
+
+El decodificador enciende el LED solo en m=1 y m=2. El sumador muestra 0-9; 9+9=18 deja S=2, C4=1 y enciende el LED de acarreo. Las sumas 10-15 y 26-30 quedan fuera de BCD y se documentan como tales.
+
+```bash
+cargo run --release -- --simular "assets/Practica 7 - Daniel Gibran Alvarez Armienta - decodificador.json"
+cargo run --release -- --simular "assets/Practica 7 - Daniel Gibran Alvarez Armienta - sumador.json"
+cargo run --release -- --instrucciones "assets/Practica 7 - Daniel Gibran Alvarez Armienta - decodificador.json"
+python3 tools/gen_practica7.py
+```
+
+## Proyecto Final
+
+Sumador-restador de números de 4 bits con entradas y salidas BCD, en 3 protoboards de 60 columnas:
+
+- 5 × 74283 (BCD→binario, suma/resta, magnitud y corrección).
+- 3 × 74HC86, 4 × 74HC08, 2 × 74HC32 y 1 × 74HC04.
+- 2 × 7448 con displays de 7 segmentos y LED de signo.
+- 11 interruptores DIP: 5 por número y 1 para suma/resta.
+- 512 combinaciones válidas verificadas (16 valores × 16 valores × 2 operaciones).
+
+```bash
+cargo run --release -- --simular "assets/Proyecto Final - Daniel Gibran Alvarez Armienta y Jose Salvador Arreguin Verdugo.json"
+cargo run --release -- --instrucciones "assets/Proyecto Final - Daniel Gibran Alvarez Armienta y Jose Salvador Arreguin Verdugo.json"
+python3 tools/gen_proyecto_final.py
+```
+
+![Proyecto final](docs/screenshots/proyecto_final.png)
+
+Ejemplos de los CI restantes y del modo analógico:
+
+```bash
+cargo run --release -- --archivo assets/ejemplo_74151.json
+cargo run --release -- --archivo assets/ejemplo_74157.json
+cargo run --release -- --archivo assets/ejemplo_7485.json
+cargo run --release -- --archivo assets/ejemplo_potenciometro.json
+cargo run --release -- --archivo assets/ejemplo_pulsador.json
+cargo run --release -- --archivo assets/ejemplo_analogico.json
+```
+
+| Decodificador 74138 | Sumador 74283 + 7448 |
+|---|---|
+| ![P7 decodificador](docs/screenshots/practica7_decoder.png) | ![P7 sumador](docs/screenshots/practica7_sumador.png) |
 
 ## Formato de circuito
 
