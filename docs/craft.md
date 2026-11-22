@@ -12,17 +12,18 @@ OpenCircuit nació de un pedido concreto: un software que simulase circuitos vi�
 ## Decisiones principales
 
 - **Modelo físico**: orificios con filas `a..j`, columnas, rieles `t+`, `t-`, `b+`, `b-` y hasta 3 placas.
-- **Componentes**: fuente, resistencia, LED, interruptor, display de 7 segmentos, cable, etiqueta de red y chips 74HC08/32/04.
-- **Simulación nodal**: se resuelven redes, voltajes, corriente de LEDs y segmentos del display; la tabla de verdad se calcula bajo demanda.
+- **Componentes**: fuente, resistencia, LED, interruptor, potenciómetro, pulsador momentáneo, display de 7 segmentos, cable, etiqueta de red y chips DIP-14/DIP-16.
+- **Simulación nodal**: se resuelven redes, voltajes, corriente de LEDs y segmentos del display; la tabla de verdad se calcula bajo demanda. El potenciómetro son dos conductancias y el pulsador une sus redes mientras está presionado.
 - **Cableado**: los cables se trazan con A* sobre una rejilla de medio orificio. Esquivan patas, cuerpos y otros cables; los quiebres se pueden arrastrar a mano.
 - **Etiquetas**: para circuitos grandes, las redes lógicas se conectan por nombre en lugar de llenar la protoboard de cables. Se pueden convertir cables a etiquetas y viceversa.
 - **Práctica 5**: se generó desde un netlist y un checklist de 32 casos con `tools/gen_practica5.py`. Usa 3 placas, 12 CI, 5 interruptores, 2 LEDs y un display.
+- **Práctica 7**: el núcleo pasó de 14 a 16 patas sin romper los chips anteriores. `ChipInfo` declara pines, VCC, GND y una función MSI (`Decoder3To8`, `Adder4`, `Bcd7Seg`, `Mux8`, `Mux2x4`, `Comparator4`). Los circuitos se generan con `tools/gen_practica7.py`; los ejemplos MSI y analógicos, con `tools/gen_ejemplos_msi.py`.
 - **Grupos**: las carpetas del modelo (`Comp.carpeta`) se editan desde la pestaña **Grupos**. Se puede ocultar, enfocar, buscar y reordenar por grupo. Todo se guarda en el mismo JSON.
 - **Interfaz**: tema oscuro de laboratorio, panel de piezas/grupos, panel de estado compacto y barra inferior con zoom, selección y grupo activo.
 
 ## Verificación
 
-- 41 pruebas automáticas: simulación, compuertas, displays, etiquetas, conversión cables/etiquetas, grupos, rehacer, rutas ortogonales y los 32 casos de la Práctica 5.
+- 53 pruebas automáticas: simulación, compuertas, displays, etiquetas, conversión cables/etiquetas, grupos, rehacer, rutas ortogonales, los 32 casos de la Práctica 5, los 16+16 de la Práctica 6 y los 8+256 de la Práctica 7. También cubren los siete CI MSI, el potenciómetro y el pulsador.
 - `cargo clippy --all-targets -- -D warnings` sin avisos.
 - La Práctica 5 se simula con 228 componentes, 3 placas de 60 columnas y 12 chips.
 - Capturas de la interfaz en `docs/screenshots/`.
@@ -31,7 +32,7 @@ OpenCircuit nació de un pedido concreto: un software que simulase circuitos vi�
 
 - Tema claro.
 - Empaquetado geométrico perfecto de haces de cables.
-- Más componentes: potenciómetro, pulsador momentáneo, relevadores.
+- Más componentes: relevadores y otros sensores.
 - Firma y notarización de los binarios de macOS/Windows.
 - Versión web o tableta.
 

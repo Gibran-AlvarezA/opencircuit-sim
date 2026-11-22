@@ -87,7 +87,22 @@ pub fn display_char(segs: &[bool; 7]) -> char {
     }
 }
 
-type Gates = Vec<(usize, Vec<usize>, u8, Vec<u8>)>; // (red salida, redes entrada, pin salida, pines entrada)
+struct ChipSim<'a> {
+    id: String,
+    info: &'a ChipInfo,
+    powered: bool,
+    vdd: f64,
+    pins: [usize; 17],
+}
+
+fn eval_chip(ch: &ChipSim, v: &[f64], floating: &[bool]) -> Vec<(u8, bool)> {
+    let mut bits = [false; 17];
+    for p in ch.info.input_pins() {
+        let n = ch.pins[p as usize];
+        bits[p as usize] = !floating[n] && v[n] > ch.vdd * 0.5;
+    }
+    ch.info.eval(&bits)
+}
 
 struct LedCalc {
     id: String,
@@ -128,7 +143,10 @@ pub fn simulate(c: &Circuito) -> Sim {
         x
     }
     for (comp, hs) in &parsed {
-        if comp.tipo == Tipo::Cable || (comp.tipo == Tipo::Interruptor && comp.cerrado) {
+        if comp.tipo == Tipo::Cable
+            || (comp.tipo == Tipo::Interruptor && comp.cerrado)
+            || (comp.tipo == Tipo::Pulsador && comp.presionado)
+        {
             let a = find(&mut uf, strip_ix[&hs[0].strip()]);
             let b = find(&mut uf, strip_ix[&hs[1].strip()]);
             uf[a] = b;
@@ -167,10 +185,10 @@ pub fn simulate(c: &Circuito) -> Sim {
     }
     let n = root_net.len();
     let net = |h: &Hole| nets[&h.strip()];
-    let mut pins_in_net = vec![0usize; n];
+    let mut pin_count = vec![0usize; n];
     for (_, hs) in &parsed {
         for h in hs {
-            pins_in_net[net(h)] += 1;
+            pin_count[net(h)] += 1;
         }
     }
 
@@ -206,10 +224,16 @@ pub fn simulate(c: &Circuito) -> Sim {
     let mut res = Vec::new();
     let mut leds: Vec<LedCalc> = Vec::new();
     let mut displays: Vec<DisplayCalc> = Vec::new();
-    let mut chips: Vec<(String, &ChipInfo, bool, f64, Gates)> = Vec::new();
+    let mut chips: Vec<ChipSim> = Vec::new();
     for (comp, hs) in &parsed {
         match comp.tipo {
             Tipo::Resistencia => res.push((net(&hs[0]), net(&hs[1]), 1.0 / comp.ohmios())),
+            Tipo::Potenciometro => {
+                let r = comp.ohmios().max(1.0);
+                let p = comp.posicion();
+                res.push((net(&hs[0]), net(&hs[1]), 1.0 / (r * (1.0 - p)).max(1.0)));
+                res.push((net(&hs[1]), net(&hs[2]), 1.0 / (r * p).max(1.0)));
+            }
             Tipo::Led => leds.push(LedCalc {
                 id: comp.id.clone(),
                 a: net(&hs[0]),
@@ -264,7 +288,11 @@ pub fn simulate(c: &Circuito) -> Sim {
             }
             Tipo::Chip => {
                 let info = chip_info(comp.modelo.as_deref().unwrap_or("")).unwrap();
-                let (vcc, gnd) = (net(&hs[13]), net(&hs[6]));
+                let mut pins = [0usize; 17];
+                for p in 1..=info.pines {
+                    pins[p as usize] = net(&hs[p as usize - 1]);
+                }
+                let (vcc, gnd) = (pins[info.vcc as usize], pins[info.gnd as usize]);
                 let col = hs[0].col();
                 let (mut powered, mut vdd) = (false, 0.0);
                 match (fixed[vcc], fixed[gnd]) {
@@ -276,29 +304,25 @@ pub fn simulate(c: &Circuito) -> Sim {
                         }
                     }
                     (Some(v), Some(g)) if g - v >= 2.0 => sim.errors.push(format!(
-                        "¡{} está alimentado al revés! El pin 14 (VCC) va al + y el pin 7 (GND) al -. Así se dañaría.",
-                        comp.id
+                        "¡{} está alimentado al revés! El pin {} (VCC) va al + y el pin {} (GND) al -. Así se dañaría.",
+                        comp.id, info.vcc, info.gnd
                     )),
                     _ => sim.warnings.push(format!(
-                        "{} no tiene alimentación: conecta su pin 14 (VCC, en e{}) al + y su pin 7 (GND, en f{}) al -.",
+                        "{} no tiene alimentación: conecta su pin {} (VCC, en e{}) al + y su pin {} (GND, en f{}) al -.",
                         comp.id,
-                        col,
-                        col + 6
+                        info.vcc,
+                        col + info.pines as i32 - info.vcc as i32,
+                        info.gnd,
+                        col + info.gnd as i32 - 1
                     )),
                 }
-                let gates = info
-                    .gates
-                    .iter()
-                    .map(|(ins, out)| {
-                        (
-                            net(&hs[*out as usize - 1]),
-                            ins.iter().map(|p| net(&hs[*p as usize - 1])).collect(),
-                            *out,
-                            ins.to_vec(),
-                        )
-                    })
-                    .collect();
-                chips.push((comp.id.clone(), info, powered, vdd, gates));
+                chips.push(ChipSim {
+                    id: comp.id.clone(),
+                    info,
+                    powered,
+                    vdd,
+                    pins,
+                });
             }
             _ => {}
         }
@@ -328,9 +352,9 @@ pub fn simulate(c: &Circuito) -> Sim {
         }
     }
     for ch in &chips {
-        if ch.2 {
-            for g in &ch.4 {
-                seed(g.0, &mut floating, &mut q);
+        if ch.powered {
+            for p in ch.info.output_pins() {
+                seed(ch.pins[p as usize], &mut floating, &mut q);
             }
         }
     }
@@ -340,16 +364,23 @@ pub fn simulate(c: &Circuito) -> Sim {
         }
     }
 
-    let mut outs: Vec<Vec<bool>> = chips.iter().map(|c| vec![false; c.4.len()]).collect();
+    let mut outs: Vec<Vec<(u8, bool)>> = chips
+        .iter()
+        .map(|ch| ch.info.output_pins().iter().map(|p| (*p, false)).collect())
+        .collect();
     let mut led_on = vec![false; leds.len()];
     let mut v = vec![0.0; n];
     let mut stable = false;
     for _ in 0..40 {
         let mut norton = Vec::new();
         for (ci, ch) in chips.iter().enumerate() {
-            if ch.2 {
-                for (gi, g) in ch.4.iter().enumerate() {
-                    norton.push((g.0, 1.0 / R_OUT, if outs[ci][gi] { ch.3 } else { 0.0 }));
+            if ch.powered {
+                for (p, val) in &outs[ci] {
+                    norton.push((
+                        ch.pins[*p as usize],
+                        1.0 / R_OUT,
+                        if *val { ch.vdd } else { 0.0 },
+                    ));
                 }
             }
         }
@@ -384,15 +415,8 @@ pub fn simulate(c: &Circuito) -> Sim {
         }
         let mut new = outs.clone();
         for (ci, ch) in chips.iter().enumerate() {
-            if !ch.2 {
-                continue;
-            }
-            for (gi, g) in ch.4.iter().enumerate() {
-                let ins: Vec<bool> =
-                    g.1.iter()
-                        .map(|&nn| !floating[nn] && v[nn] > ch.3 * 0.5)
-                        .collect();
-                new[ci][gi] = ch.1.gate.eval(&ins);
+            if ch.powered {
+                new[ci] = eval_chip(ch, &v, &floating);
             }
         }
         if new == outs {
@@ -406,25 +430,31 @@ pub fn simulate(c: &Circuito) -> Sim {
     }
 
     for (ci, ch) in chips.iter().enumerate() {
-        if ch.2 {
-            for g in &ch.4 {
-                if pins_in_net[g.0] < 2 {
-                    continue; // salida sin usar: no importa
-                }
-                for (k, &nn) in g.1.iter().enumerate() {
-                    if floating[nn] {
-                        sim.warnings.push(format!("{}: la entrada del pin {} está «al aire» (no llega ni al + ni al -). Da resultados al azar: añade una resistencia de 10 kΩ hacia el - (pull-down).", ch.0, g.3[k]));
-                    } else if v[nn] > 0.3 * ch.3 && v[nn] < 0.7 * ch.3 {
-                        sim.warnings.push(format!("{}: el pin {} recibe {:.2} V, un voltaje intermedio: el chip no sabe si es 0 o 1.", ch.0, g.3[k], v[nn]));
-                    }
+        if ch.powered {
+            let inputs: Vec<u8> = match ch.info.func {
+                ChipFunc::Gates(_) => ch
+                    .info
+                    .gates
+                    .iter()
+                    .filter(|(_, out)| pin_count[ch.pins[*out as usize]] > 1)
+                    .flat_map(|(ins, _)| ins.iter().copied())
+                    .collect(),
+                _ => ch.info.input_pins(),
+            };
+            for p in inputs {
+                let nn = ch.pins[p as usize];
+                if floating[nn] {
+                    sim.warnings.push(format!("{}: la entrada del pin {} está «al aire» (no llega ni al + ni al -). Da resultados al azar: añade una resistencia de 10 kΩ hacia el - (pull-down).", ch.id, p));
+                } else if v[nn] > 0.3 * ch.vdd && v[nn] < 0.7 * ch.vdd {
+                    sim.warnings.push(format!("{}: el pin {} recibe {:.2} V, un voltaje intermedio: el chip no sabe si es 0 o 1.", ch.id, p, v[nn]));
                 }
             }
         }
         sim.chips.push(ChipState {
-            id: ch.0.clone(),
-            modelo: ch.1.modelo.into(),
-            powered: ch.2,
-            outputs: ch.4.iter().zip(&outs[ci]).map(|(g, o)| (g.2, *o)).collect(),
+            id: ch.id.clone(),
+            modelo: ch.info.modelo.into(),
+            powered: ch.powered,
+            outputs: outs[ci].clone(),
         });
     }
 
@@ -1030,5 +1060,350 @@ mod tests {
             include_str!("../assets/checklist_celular.csv"),
             9,
         );
+    }
+
+    fn pin(info: &ChipInfo, name: &str) -> u8 {
+        info.pin_names
+            .iter()
+            .find(|(_, n)| *n == name)
+            .unwrap_or_else(|| panic!("{} no tiene el pin {name}", info.modelo))
+            .0
+    }
+
+    fn set(v: &mut [bool; 17], info: &ChipInfo, name: &str, val: bool) {
+        v[pin(info, name) as usize] = val;
+    }
+
+    fn get(o: &[(u8, bool)], p: u8) -> bool {
+        o.iter().find(|(q, _)| *q == p).unwrap().1
+    }
+
+    #[test]
+    fn dip16_geometria() {
+        use Tipo::*;
+        let mut c = Comp::nuevo("U1", Chip, &["f12"]);
+        c.modelo = Some("74138".into());
+        let hs = c.holes().unwrap();
+        assert_eq!(hs.len(), 16);
+        assert_eq!(hs[0].name(), "f12");
+        assert_eq!(hs[7].name(), "f19");
+        assert_eq!(hs[8].name(), "e19");
+        assert_eq!(hs[15].name(), "e12");
+        let mut c = Comp::nuevo("U2", Chip, &["f55"]);
+        c.modelo = Some("74138".into());
+        assert!(c.holes().is_err());
+    }
+
+    #[test]
+    fn decodificador_74138() {
+        let info = chip_info("74138").unwrap();
+        for n in 0..8 {
+            let mut v = [false; 17];
+            v[6] = true;
+            v[1] = n & 1 == 1;
+            v[2] = n & 2 != 0;
+            v[3] = n & 4 != 0;
+            let o = info.eval(&v);
+            for (i, p) in [15u8, 14, 13, 12, 11, 10, 9, 7].iter().enumerate() {
+                assert_eq!(get(&o, *p), i != n, "salida {p} con m={n}");
+            }
+            v[6] = false;
+            assert!(info.eval(&v).iter().all(|(_, x)| *x));
+        }
+    }
+
+    fn sumador(modelo: &str) {
+        let info = chip_info(modelo).unwrap();
+        for a in 0..16 {
+            for b in 0..16 {
+                for c0 in [false, true] {
+                    let mut v = [false; 17];
+                    for i in 0..4 {
+                        set(&mut v, info, &format!("A{}", i + 1), (a >> i) & 1 == 1);
+                        set(&mut v, info, &format!("B{}", i + 1), (b >> i) & 1 == 1);
+                    }
+                    set(&mut v, info, "C0", c0);
+                    let total = a + b + c0 as usize;
+                    let o = info.eval(&v);
+                    for i in 0..4 {
+                        assert_eq!(
+                            get(&o, pin(info, &format!("S{}", i + 1))),
+                            (total >> i) & 1 == 1,
+                            "{modelo}: {a}+{b}+{c0} S{}",
+                            i + 1
+                        );
+                    }
+                    assert_eq!(get(&o, pin(info, "C4")), total > 15, "{modelo}: {a}+{b}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sumadores_74283_y_7483() {
+        sumador("74283");
+        sumador("7483");
+    }
+
+    #[test]
+    fn decodificador_7448() {
+        let info = chip_info("7448").unwrap();
+        let segs = ["a", "b", "c", "d", "e", "f", "g"];
+        let patrones = [
+            "abcdef", "bc", "abdeg", "abcdg", "bcfg", "acdfg", "acdefg", "abc", "abcdefg", "abcdfg",
+        ];
+        for code in 0..16 {
+            let mut v = [false; 17];
+            set(&mut v, info, "/LT", true);
+            set(&mut v, info, "/BI/RBO", true);
+            set(&mut v, info, "/RBI", true);
+            for (i, n) in ["A", "B", "C", "D"].iter().enumerate() {
+                set(&mut v, info, n, (code >> i) & 1 == 1);
+            }
+            let o = info.eval(&v);
+            let s: String = segs
+                .iter()
+                .filter(|n| get(&o, pin(info, n)))
+                .map(|n| n.chars().next().unwrap())
+                .collect();
+            if let Some(p) = patrones.get(code) {
+                assert_eq!(s, *p, "7448 con {code}");
+            } else {
+                assert!(!s.is_empty(), "7448 con {code} no debe quedar en blanco");
+            }
+        }
+        let mut v = [false; 17];
+        set(&mut v, info, "/LT", true);
+        set(&mut v, info, "/BI/RBO", false);
+        assert!(info.eval(&v).iter().all(|(_, x)| !*x));
+        set(&mut v, info, "/BI/RBO", true);
+        set(&mut v, info, "/LT", false);
+        assert!(info.eval(&v).iter().all(|(_, x)| *x));
+    }
+
+    #[test]
+    fn mux_74151() {
+        let info = chip_info("74151").unwrap();
+        let datos = [true, false, true, true, false, true, false, true];
+        for n in 0..8 {
+            let mut v = [false; 17];
+            for (i, d) in datos.iter().enumerate() {
+                set(&mut v, info, &format!("D{i}"), *d);
+            }
+            set(&mut v, info, "A", n & 1 == 1);
+            set(&mut v, info, "B", n & 2 != 0);
+            set(&mut v, info, "C", n & 4 != 0);
+            set(&mut v, info, "/G", false);
+            let o = info.eval(&v);
+            assert_eq!(get(&o, 5), datos[n], "Y con {n}");
+            assert_eq!(get(&o, 6), !datos[n], "W con {n}");
+            set(&mut v, info, "/G", true);
+            let o = info.eval(&v);
+            assert!(!get(&o, 5) && get(&o, 6));
+        }
+    }
+
+    #[test]
+    fn mux_74157() {
+        let info = chip_info("74157").unwrap();
+        for e in [false, true] {
+            for s in [false, true] {
+                let mut v = [false; 17];
+                for i in 0..4 {
+                    set(&mut v, info, &format!("{}A", i + 1), i % 2 == 0);
+                    set(&mut v, info, &format!("{}B", i + 1), i % 2 == 1);
+                }
+                set(&mut v, info, "/E", e);
+                set(&mut v, info, "S", s);
+                let o = info.eval(&v);
+                for i in 0..4 {
+                    let esperado = !e && if s { i % 2 == 1 } else { i % 2 == 0 };
+                    assert_eq!(get(&o, [4u8, 7, 9, 12][i]), esperado);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn comparador_7485() {
+        let info = chip_info("7485").unwrap();
+        for a in 0..16 {
+            for b in 0..16 {
+                let mut v = [false; 17];
+                for i in 0..4 {
+                    set(&mut v, info, &format!("A{i}"), (a >> i) & 1 == 1);
+                    set(&mut v, info, &format!("B{i}"), (b >> i) & 1 == 1);
+                }
+                v[2] = false;
+                v[3] = true;
+                v[4] = false;
+                let o = info.eval(&v);
+                assert_eq!(get(&o, 5), a > b, "{a} > {b}");
+                assert_eq!(get(&o, 6), a == b);
+                assert_eq!(get(&o, 7), a < b);
+            }
+        }
+        let mut v = [false; 17];
+        v[3] = false;
+        v[4] = true;
+        let o = info.eval(&v);
+        assert!(get(&o, 5) && !get(&o, 6) && !get(&o, 7));
+    }
+
+    #[test]
+    fn ejemplos_sin_errores() {
+        for c in ejemplos() {
+            let s = simulate(&c);
+            assert!(s.errors.is_empty(), "{}: {:?}", c.nombre, s.errors);
+        }
+    }
+
+    fn p7(archivo: &str) -> Circuito {
+        let json = match archivo {
+            "decoder" => include_str!(
+                "../assets/Practica 7 - Daniel Gibran Alvarez Armienta - decodificador.json"
+            ),
+            _ => {
+                include_str!("../assets/Practica 7 - Daniel Gibran Alvarez Armienta - sumador.json")
+            }
+        };
+        serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn practica7_decoder_8_casos() {
+        let c = p7("decoder");
+        for m in 0..8 {
+            let bits = [(m >> 2) & 1 == 1, (m >> 1) & 1 == 1, m & 1 == 1];
+            let s = simulate(&con_switches(c.clone(), &bits));
+            assert!(s.errors.is_empty(), "{:?}", s.errors);
+            assert_eq!(s.led("D1").unwrap().on, m == 1 || m == 2, "m={m}");
+        }
+    }
+
+    #[test]
+    fn practica7_sumador_256_casos() {
+        let c = p7("sumador");
+        for a in 0..16 {
+            for b in 0..16 {
+                let bits: Vec<bool> = (0..4)
+                    .map(|i| (a >> i) & 1 == 1)
+                    .chain((0..4).map(|i| (b >> i) & 1 == 1))
+                    .collect();
+                let s = simulate(&con_switches(c.clone(), &bits));
+                assert!(s.errors.is_empty(), "{:?}", s.errors);
+                assert!(s.chips.iter().all(|ch| ch.powered));
+                let d = s.display("DS1").unwrap();
+                if a + b < 10 {
+                    assert_eq!(
+                        d.text,
+                        char::from_digit((a + b) as u32, 10).unwrap(),
+                        "{a}+{b}"
+                    );
+                }
+                if a + b > 15 && a + b < 26 {
+                    assert_eq!(
+                        d.text,
+                        char::from_digit((a + b - 16) as u32, 10).unwrap(),
+                        "{a}+{b}"
+                    );
+                }
+                assert_eq!(s.led("D2").unwrap().on, a + b > 15, "acarreo de {a}+{b}");
+            }
+        }
+    }
+
+    #[test]
+    fn proyecto_final_512_casos() {
+        let c = ejemplos()
+            .into_iter()
+            .find(|c| c.nombre.contains("Proyecto Final"))
+            .expect("falta el JSON del Proyecto Final");
+        let base = simulate(&c);
+        assert!(base.errors.is_empty(), "{:?}", base.errors);
+        assert!(
+            !base.warnings.iter().any(|w| w.contains("al aire")),
+            "entradas flotantes: {:?}",
+            base.warnings
+        );
+        assert_eq!(base.chips.len(), 17, "deben ser 17 CI");
+        assert!(
+            base.chips.iter().all(|ch| ch.powered),
+            "algún CI sin alimentación"
+        );
+
+        let csv = include_str!("../assets/checklist_proyecto_final.csv");
+        let mut ok = 0;
+        for line in csv.lines().skip(1) {
+            let f: Vec<&str> = line.split(',').collect();
+            assert_eq!(f.len(), 17, "fila incompleta: {line}");
+            let bits: Vec<bool> = f[3..14].iter().map(|x| *x == "1").collect();
+            let s = simulate(&con_switches(c.clone(), &bits));
+            assert!(s.errors.is_empty(), "{:?}", s.errors);
+            let dec = f[14].parse::<u32>().unwrap();
+            let uni = f[15].parse::<u32>().unwrap();
+            let signo = f[16] == "1";
+            assert_eq!(
+                s.display("DS1").unwrap().text,
+                char::from_digit(dec, 10).unwrap(),
+                "decenas de {} {} {}",
+                f[0],
+                f[1],
+                f[2]
+            );
+            assert_eq!(
+                s.display("DS2").unwrap().text,
+                char::from_digit(uni, 10).unwrap(),
+                "unidades de {} {} {}",
+                f[0],
+                f[1],
+                f[2]
+            );
+            assert_eq!(
+                s.led("D1").unwrap().on,
+                signo,
+                "signo de {} {} {}",
+                f[0],
+                f[1],
+                f[2]
+            );
+            ok += 1;
+        }
+        assert_eq!(ok, 512, "solo pasaron {ok}/512");
+        println!("512/512");
+    }
+
+    #[test]
+    fn potenciometro_y_pulsador() {
+        use Tipo::*;
+        let h = |row: u8, col: i32| Hole::Main { board: 1, row, col };
+        let k = Comp::nuevo;
+        let mut c = Circuito {
+            componentes: vec![
+                k("F1", Fuente, &["t+1", "t-1"]).v(5.0),
+                k("P1", Potenciometro, &["t+1", "a5", "t-1"]).v(10_000.0),
+                k("R1", Resistencia, &["a5", "t-1"]).v(10_000.0),
+            ],
+            ..Default::default()
+        };
+        c.componentes[1].posicion = Some(0.5);
+        let s = simulate(&c);
+        assert!((s.volt_at(h(0, 5)).unwrap().0 - 2.0).abs() < 0.05);
+        c.componentes[1].posicion = Some(0.0);
+        assert!(simulate(&c).volt_at(h(0, 5)).unwrap().0 < 0.01);
+        c.componentes[1].posicion = Some(1.0);
+        assert!(simulate(&c).volt_at(h(0, 5)).unwrap().0 > 4.99);
+
+        let mut p = Circuito {
+            componentes: vec![
+                k("F1", Fuente, &["t+1", "t-1"]).v(5.0),
+                k("R1", Resistencia, &["a5", "t-1"]).v(10_000.0),
+                k("B1", Pulsador, &["t+1", "a5"]),
+            ],
+            ..Default::default()
+        };
+        assert!(simulate(&p).volt_at(h(0, 5)).unwrap().0 < 0.01);
+        p.componentes[2].presionado = true;
+        assert!(simulate(&p).volt_at(h(0, 5)).unwrap().0 > 4.99);
     }
 }

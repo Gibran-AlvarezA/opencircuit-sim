@@ -23,6 +23,8 @@ pub fn lineas(c: &Circuito) -> Vec<Line> {
             Tipo::Resistencia => ("Resistencias", fmt_ohm(x.ohmios())),
             Tipo::Led => ("LEDs", x.color_or("rojo")),
             Tipo::Interruptor => ("Interruptores", "Interruptor".into()),
+            Tipo::Potenciometro => ("Potenciómetros", fmt_ohm(x.ohmios())),
+            Tipo::Pulsador => ("Pulsadores", "Pulsador momentáneo".into()),
             Tipo::Display => ("Displays", "Display 7 segmentos".into()),
             Tipo::Fuente => ("Fuentes", format!("Fuente {:.1} V", x.voltios())),
             Tipo::Cable => {
@@ -98,12 +100,16 @@ mod tests {
 
     #[test]
     fn practica6_cuenta_sus_chips() {
-        let r = prac(include_str!("../assets/practica6_rumbo.json"));
+        let r = prac(include_str!(
+            "../assets/Practica 6 - Daniel Gibran Alvarez Armienta - rumbo.json"
+        ));
         assert_eq!(cant(&r, "CI", "74HC08"), 4);
         assert_eq!(cant(&r, "CI", "74HC32"), 3);
         assert_eq!(cant(&r, "CI", "74HC04"), 1);
 
-        let b = prac(include_str!("../assets/practica6_celular.json"));
+        let b = prac(include_str!(
+            "../assets/Practica 6 - Daniel Gibran Alvarez Armienta - celular.json"
+        ));
         assert_eq!(cant(&b, "CI", "74HC08"), 3);
         assert_eq!(cant(&b, "CI", "74HC32"), 5);
         assert_eq!(cant(&b, "CI", "74HC04"), 1);

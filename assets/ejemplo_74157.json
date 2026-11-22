@@ -1,0 +1,690 @@
+{
+  "nombre": "Ejemplo 74157 — cuatro multiplexores 2 a 1",
+  "columnas": 60,
+  "tableros": 3,
+  "componentes": [
+    {
+      "id": "F1",
+      "tipo": "fuente",
+      "pines": [
+        "t+1",
+        "t-1"
+      ],
+      "valor": 5.0
+    },
+    {
+      "id": "L1",
+      "tipo": "etiqueta",
+      "pines": [
+        "t+2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L2",
+      "tipo": "etiqueta",
+      "pines": [
+        "t-2"
+      ],
+      "nombre": "GND"
+    },
+    {
+      "id": "U1",
+      "tipo": "chip",
+      "pines": [
+        "f1"
+      ],
+      "modelo": "74157"
+    },
+    {
+      "id": "L3",
+      "tipo": "etiqueta",
+      "pines": [
+        "g1"
+      ],
+      "nombre": "S"
+    },
+    {
+      "id": "L4",
+      "tipo": "etiqueta",
+      "pines": [
+        "d2"
+      ],
+      "nombre": "GND"
+    },
+    {
+      "id": "L5",
+      "tipo": "etiqueta",
+      "pines": [
+        "g2"
+      ],
+      "nombre": "A1"
+    },
+    {
+      "id": "L6",
+      "tipo": "etiqueta",
+      "pines": [
+        "g3"
+      ],
+      "nombre": "B1"
+    },
+    {
+      "id": "L7",
+      "tipo": "etiqueta",
+      "pines": [
+        "g5"
+      ],
+      "nombre": "A2"
+    },
+    {
+      "id": "L8",
+      "tipo": "etiqueta",
+      "pines": [
+        "g6"
+      ],
+      "nombre": "B2"
+    },
+    {
+      "id": "L9",
+      "tipo": "etiqueta",
+      "pines": [
+        "d6"
+      ],
+      "nombre": "A3"
+    },
+    {
+      "id": "L10",
+      "tipo": "etiqueta",
+      "pines": [
+        "d7"
+      ],
+      "nombre": "B3"
+    },
+    {
+      "id": "L11",
+      "tipo": "etiqueta",
+      "pines": [
+        "d3"
+      ],
+      "nombre": "A4"
+    },
+    {
+      "id": "L12",
+      "tipo": "etiqueta",
+      "pines": [
+        "d4"
+      ],
+      "nombre": "B4"
+    },
+    {
+      "id": "L13",
+      "tipo": "etiqueta",
+      "pines": [
+        "g4"
+      ],
+      "nombre": "Y1"
+    },
+    {
+      "id": "L14",
+      "tipo": "etiqueta",
+      "pines": [
+        "g7"
+      ],
+      "nombre": "Y2"
+    },
+    {
+      "id": "L15",
+      "tipo": "etiqueta",
+      "pines": [
+        "d8"
+      ],
+      "nombre": "Y3"
+    },
+    {
+      "id": "L16",
+      "tipo": "etiqueta",
+      "pines": [
+        "d5"
+      ],
+      "nombre": "Y4"
+    },
+    {
+      "id": "L17",
+      "tipo": "etiqueta",
+      "pines": [
+        "d1"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L18",
+      "tipo": "etiqueta",
+      "pines": [
+        "g8"
+      ],
+      "nombre": "GND"
+    },
+    {
+      "id": "S1",
+      "tipo": "interruptor",
+      "pines": [
+        "f1@2",
+        "f3@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L19",
+      "tipo": "etiqueta",
+      "pines": [
+        "g1@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L20",
+      "tipo": "etiqueta",
+      "pines": [
+        "g3@2"
+      ],
+      "nombre": "A1"
+    },
+    {
+      "id": "RS1",
+      "tipo": "resistencia",
+      "pines": [
+        "j3@2",
+        "b-3@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "S2",
+      "tipo": "interruptor",
+      "pines": [
+        "f4@2",
+        "f6@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L21",
+      "tipo": "etiqueta",
+      "pines": [
+        "g4@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L22",
+      "tipo": "etiqueta",
+      "pines": [
+        "g6@2"
+      ],
+      "nombre": "B1"
+    },
+    {
+      "id": "RS2",
+      "tipo": "resistencia",
+      "pines": [
+        "j6@2",
+        "b-6@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "S3",
+      "tipo": "interruptor",
+      "pines": [
+        "f7@2",
+        "f9@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L23",
+      "tipo": "etiqueta",
+      "pines": [
+        "g7@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L24",
+      "tipo": "etiqueta",
+      "pines": [
+        "g9@2"
+      ],
+      "nombre": "A2"
+    },
+    {
+      "id": "RS3",
+      "tipo": "resistencia",
+      "pines": [
+        "j9@2",
+        "b-9@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "S4",
+      "tipo": "interruptor",
+      "pines": [
+        "f10@2",
+        "f12@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L25",
+      "tipo": "etiqueta",
+      "pines": [
+        "g10@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L26",
+      "tipo": "etiqueta",
+      "pines": [
+        "g12@2"
+      ],
+      "nombre": "B2"
+    },
+    {
+      "id": "RS4",
+      "tipo": "resistencia",
+      "pines": [
+        "j12@2",
+        "b-12@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "S5",
+      "tipo": "interruptor",
+      "pines": [
+        "f13@2",
+        "f15@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L27",
+      "tipo": "etiqueta",
+      "pines": [
+        "g13@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L28",
+      "tipo": "etiqueta",
+      "pines": [
+        "g15@2"
+      ],
+      "nombre": "A3"
+    },
+    {
+      "id": "RS5",
+      "tipo": "resistencia",
+      "pines": [
+        "j15@2",
+        "b-15@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "S6",
+      "tipo": "interruptor",
+      "pines": [
+        "f16@2",
+        "f18@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L29",
+      "tipo": "etiqueta",
+      "pines": [
+        "g16@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L30",
+      "tipo": "etiqueta",
+      "pines": [
+        "g18@2"
+      ],
+      "nombre": "B3"
+    },
+    {
+      "id": "RS6",
+      "tipo": "resistencia",
+      "pines": [
+        "j18@2",
+        "b-18@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "S7",
+      "tipo": "interruptor",
+      "pines": [
+        "f19@2",
+        "f21@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L31",
+      "tipo": "etiqueta",
+      "pines": [
+        "g19@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L32",
+      "tipo": "etiqueta",
+      "pines": [
+        "g21@2"
+      ],
+      "nombre": "A4"
+    },
+    {
+      "id": "RS7",
+      "tipo": "resistencia",
+      "pines": [
+        "j21@2",
+        "b-21@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "S8",
+      "tipo": "interruptor",
+      "pines": [
+        "f22@2",
+        "f24@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L33",
+      "tipo": "etiqueta",
+      "pines": [
+        "g22@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L34",
+      "tipo": "etiqueta",
+      "pines": [
+        "g24@2"
+      ],
+      "nombre": "B4"
+    },
+    {
+      "id": "RS8",
+      "tipo": "resistencia",
+      "pines": [
+        "j24@2",
+        "b-24@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "S9",
+      "tipo": "interruptor",
+      "pines": [
+        "f25@2",
+        "f27@2"
+      ],
+      "cerrado": false
+    },
+    {
+      "id": "L35",
+      "tipo": "etiqueta",
+      "pines": [
+        "g25@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L36",
+      "tipo": "etiqueta",
+      "pines": [
+        "g27@2"
+      ],
+      "nombre": "S"
+    },
+    {
+      "id": "RS9",
+      "tipo": "resistencia",
+      "pines": [
+        "j27@2",
+        "b-27@2"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "L37",
+      "tipo": "etiqueta",
+      "pines": [
+        "t+1@2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L38",
+      "tipo": "etiqueta",
+      "pines": [
+        "b-1@2"
+      ],
+      "nombre": "GND"
+    },
+    {
+      "id": "R1",
+      "tipo": "resistencia",
+      "pines": [
+        "f40",
+        "f41"
+      ],
+      "valor": 330.0
+    },
+    {
+      "id": "L39",
+      "tipo": "etiqueta",
+      "pines": [
+        "g40"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L40",
+      "tipo": "etiqueta",
+      "pines": [
+        "g41"
+      ],
+      "nombre": "LED1_A"
+    },
+    {
+      "id": "D1",
+      "tipo": "led",
+      "pines": [
+        "f42",
+        "f43"
+      ],
+      "color": "rojo"
+    },
+    {
+      "id": "L41",
+      "tipo": "etiqueta",
+      "pines": [
+        "g42"
+      ],
+      "nombre": "LED1_A"
+    },
+    {
+      "id": "L42",
+      "tipo": "etiqueta",
+      "pines": [
+        "g43"
+      ],
+      "nombre": "Y1"
+    },
+    {
+      "id": "R2",
+      "tipo": "resistencia",
+      "pines": [
+        "f44",
+        "f45"
+      ],
+      "valor": 330.0
+    },
+    {
+      "id": "L43",
+      "tipo": "etiqueta",
+      "pines": [
+        "g44"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L44",
+      "tipo": "etiqueta",
+      "pines": [
+        "g45"
+      ],
+      "nombre": "LED2_A"
+    },
+    {
+      "id": "D2",
+      "tipo": "led",
+      "pines": [
+        "f46",
+        "f47"
+      ],
+      "color": "rojo"
+    },
+    {
+      "id": "L45",
+      "tipo": "etiqueta",
+      "pines": [
+        "g46"
+      ],
+      "nombre": "LED2_A"
+    },
+    {
+      "id": "L46",
+      "tipo": "etiqueta",
+      "pines": [
+        "g47"
+      ],
+      "nombre": "Y2"
+    },
+    {
+      "id": "R3",
+      "tipo": "resistencia",
+      "pines": [
+        "f48",
+        "f49"
+      ],
+      "valor": 330.0
+    },
+    {
+      "id": "L47",
+      "tipo": "etiqueta",
+      "pines": [
+        "g48"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L48",
+      "tipo": "etiqueta",
+      "pines": [
+        "g49"
+      ],
+      "nombre": "LED3_A"
+    },
+    {
+      "id": "D3",
+      "tipo": "led",
+      "pines": [
+        "f50",
+        "f51"
+      ],
+      "color": "rojo"
+    },
+    {
+      "id": "L49",
+      "tipo": "etiqueta",
+      "pines": [
+        "g50"
+      ],
+      "nombre": "LED3_A"
+    },
+    {
+      "id": "L50",
+      "tipo": "etiqueta",
+      "pines": [
+        "g51"
+      ],
+      "nombre": "Y3"
+    },
+    {
+      "id": "R4",
+      "tipo": "resistencia",
+      "pines": [
+        "f52",
+        "f53"
+      ],
+      "valor": 330.0
+    },
+    {
+      "id": "L51",
+      "tipo": "etiqueta",
+      "pines": [
+        "g52"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L52",
+      "tipo": "etiqueta",
+      "pines": [
+        "g53"
+      ],
+      "nombre": "LED4_A"
+    },
+    {
+      "id": "D4",
+      "tipo": "led",
+      "pines": [
+        "f54",
+        "f55"
+      ],
+      "color": "rojo"
+    },
+    {
+      "id": "L53",
+      "tipo": "etiqueta",
+      "pines": [
+        "g54"
+      ],
+      "nombre": "LED4_A"
+    },
+    {
+      "id": "L54",
+      "tipo": "etiqueta",
+      "pines": [
+        "g55"
+      ],
+      "nombre": "Y4"
+    }
+  ]
+}

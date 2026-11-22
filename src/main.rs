@@ -130,6 +130,26 @@ fn main() {
                 app.grupo = Some(g);
             }
             app.solo_grupo = solo;
+            if has("--cablear") {
+                // Los dos botones, en orden: etiquetas -> cables y ordenar cables.
+                let et: Vec<String> = app
+                    .circ
+                    .componentes
+                    .iter()
+                    .filter(|c| c.tipo == Tipo::Etiqueta)
+                    .map(|c| c.id.clone())
+                    .collect();
+                app.convertir_varios(&et);
+                let ca: Vec<String> = app
+                    .circ
+                    .componentes
+                    .iter()
+                    .filter(|c| c.tipo == Tipo::Cable)
+                    .map(|c| c.id.clone())
+                    .collect();
+                app.ordenar(ca);
+                let _ = guardar(&app.file, &app.circ);
+            }
             Ok(Box::new(app))
         }),
     );
@@ -404,6 +424,8 @@ fn layer(t: Tipo) -> u8 {
         Tipo::Cable => 5,
         Tipo::Etiqueta => 6,
         Tipo::Fuente => 7,
+        Tipo::Potenciometro => 8,
+        Tipo::Pulsador => 9,
     }
 }
 
@@ -1010,7 +1032,8 @@ impl App {
             Tipo::Cable => c.color = Some(self.wire_color.clone()),
             Tipo::Chip => c.modelo = Some(self.chip_model.clone()),
             Tipo::Etiqueta => c.nombre = Some(self.label_name.trim().to_string()),
-            Tipo::Display | Tipo::Interruptor => {}
+            Tipo::Potenciometro => c.valor = Some(10_000.0),
+            Tipo::Display | Tipo::Interruptor | Tipo::Pulsador => {}
         }
         if t == Tipo::Etiqueta {
             if c.red().is_empty() {
@@ -1059,7 +1082,9 @@ impl App {
                     return;
                 }
             };
-            let col = col.min(self.circ.columnas - 6);
+            let pines = chip_info(&self.chip_model).map(|i| i.pines).unwrap_or(14);
+            let max = self.circ.columnas - (pines as i32 / 2 - 1);
+            let col = col.min(max);
             c.pines = vec![Hole::Main { board, row: 5, col }.name()];
             self.try_add(c);
             return;
@@ -1524,7 +1549,9 @@ impl App {
             if let Tool::Place(tp) = self.tool {
                 if tp == Tipo::Chip {
                     if let Some(Hole::Main { board, col, .. }) = hh {
-                        draw::chip_ghost(&painter, &view, board, col.min(self.circ.columnas - 6));
+                        let pines = chip_info(&self.chip_model).map(|i| i.pines).unwrap_or(14);
+                        let max = self.circ.columnas - (pines as i32 / 2 - 1);
+                        draw::chip_ghost(&painter, &view, board, col.min(max), pines);
                     }
                 } else if let (Some(a), Some(m)) = (self.pending, hover) {
                     let to = hh.map(|h| view.h(h)).unwrap_or(m);
@@ -1801,7 +1828,7 @@ impl App {
             ui,
             Tool::Place(Tipo::Chip),
             "Chip de compuertas",
-            "Circuito integrado 74HC de 14 patas",
+            "Circuito integrado DIP-14 o DIP-16",
         );
         egui::ComboBox::from_id_salt("chip")
             .selected_text(&self.chip_model)
@@ -2352,10 +2379,12 @@ impl App {
             ui.heading(format!("{} · {}", c.id, c.tipo.nombre()));
             if let Ok(hs) = c.holes() {
                 if c.tipo == Tipo::Chip {
+                    let info = chip_info(&c.modelo.clone().unwrap_or_default());
                     ui.label(format!(
-                        "Pin 1 en {}, pin 14 en {}",
+                        "Pin 1 en {}, pin {} en {}",
                         hs[0].name(),
-                        hs[13].name()
+                        info.map(|i| i.pines).unwrap_or(14),
+                        hs[hs.len() - 1].name()
                     ));
                 } else {
                     for (i, h) in hs.iter().enumerate() {
@@ -2434,7 +2463,9 @@ impl App {
                         });
                     if let Some(info) = chip_info(&m) {
                         ui.label(format!(
-                            "Pin 14 = VCC (+), pin 7 = GND (-); {}.",
+                            "Pin {} = VCC (+), pin {} = GND (-); {}.",
+                            info.vcc,
+                            info.gnd,
                             info.pinout()
                         ));
                     }
@@ -2458,6 +2489,24 @@ impl App {
                     )
                     .on_hover_text("Arrastra o escribe el voltaje (0,5 a 24 V)");
                     n.valor = Some((v * 100.0).round() / 100.0);
+                }
+                Tipo::Potenciometro => {
+                    let mut pos = c.posicion();
+                    ui.add(
+                        egui::Slider::new(&mut pos, 0.0..=1.0)
+                            .text("posición")
+                            .custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
+                    );
+                    ui.label(format!(
+                        "Valor: {} · cursor a {:.2} V si está entre 5 V y GND",
+                        fmt_ohm(c.ohmios()),
+                        pos * 5.0
+                    ));
+                    n.posicion = Some(pos);
+                }
+                Tipo::Pulsador => {
+                    ui.checkbox(&mut n.presionado, "Presionado (momentáneo)");
+                    ui.label("Al soltar vuelve a abierto.");
                 }
                 Tipo::Display => {
                     ui.label("Display de 7 segmentos de cátodo común.");

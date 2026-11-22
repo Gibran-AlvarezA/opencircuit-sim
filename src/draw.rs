@@ -738,7 +738,10 @@ pub fn comp(p: &Painter, v: &View, c: &Comp, hs: &[Hole], sim: &Sim, look: Look,
     // resaltado bajo la pieza
     if look.selected || look.current {
         if c.tipo == Tipo::Chip {
-            let (x0, x1) = (v.h(hs[0]).x - 0.9 * s, v.h(hs[6]).x + 0.9 * s);
+            let (x0, x1) = (
+                v.h(hs[0]).x - 0.9 * s,
+                v.h(hs[hs.len() / 2 - 1]).x + 0.9 * s,
+            );
             p.rect_filled(
                 Rect::from_min_max(pos2(x0, v.p(0.0, 7.6).y), pos2(x1, v.p(0.0, 11.4).y)),
                 0.3 * s,
@@ -923,9 +926,58 @@ pub fn comp(p: &Painter, v: &View, c: &Comp, hs: &[Hole], sim: &Sim, look: Look,
             );
             label(p, mid + vec2(0.0, -0.95 * s), &c.id, s);
         }
+        Tipo::Potenciometro => {
+            let (a, w, b) = (v.h(hs[0]), v.h(hs[1]), v.h(hs[2]));
+            let mid = a + (b - a) * 0.5;
+            p.line_segment([a, b], lead);
+            p.line_segment([w, mid], lead);
+            p.circle_filled(mid, 0.72 * s, Color32::from_rgb(58, 58, 66));
+            p.circle_stroke(
+                mid,
+                0.72 * s,
+                Stroke::new(0.05 * s, Color32::from_rgb(150, 150, 160)),
+            );
+            let ang = -std::f32::consts::FRAC_PI_2 + c.posicion() as f32 * std::f32::consts::TAU;
+            p.line_segment(
+                [mid, mid + vec2(ang.cos(), ang.sin()) * 0.58 * s],
+                Stroke::new(0.12 * s, Color32::from_rgb(235, 235, 240)),
+            );
+            p.text(
+                mid + vec2(0.0, 1.05 * s),
+                Align2::CENTER_CENTER,
+                format!("{:.0}%", c.posicion() * 100.0),
+                FontId::proportional(0.42 * s),
+                Color32::from_rgb(230, 230, 235),
+            );
+            label(p, mid + vec2(0.0, -1.05 * s), &c.id, s);
+        }
+        Tipo::Pulsador => {
+            let (a, b) = (v.h(hs[0]), v.h(hs[1]));
+            p.line_segment([a, b], lead);
+            let mid = a + (b - a) * 0.5;
+            let col = if c.presionado {
+                Color32::from_rgb(210, 70, 60)
+            } else {
+                Color32::from_rgb(70, 75, 85)
+            };
+            p.circle_filled(mid, 0.62 * s, col);
+            p.circle_stroke(
+                mid,
+                0.62 * s,
+                Stroke::new(0.05 * s, Color32::from_gray(180)),
+            );
+            p.text(
+                mid + vec2(0.0, 0.95 * s),
+                Align2::CENTER_CENTER,
+                if c.presionado { "PULSADO" } else { "SUELTO" },
+                FontId::proportional(0.38 * s),
+                Color32::from_rgb(230, 230, 235),
+            );
+            label(p, mid + vec2(0.0, -0.95 * s), &c.id, s);
+        }
         Tipo::Chip => {
             let x0 = v.h(hs[0]).x - 0.6 * s;
-            let x1 = v.h(hs[6]).x + 0.6 * s;
+            let x1 = v.h(hs[hs.len() / 2 - 1]).x + 0.6 * s;
             let (yt, yb) = (v.p(0.0, 8.35).y, v.p(0.0, 10.65).y);
             for h in hs {
                 let hp = v.h(*h);
@@ -1072,17 +1124,18 @@ pub fn comp(p: &Painter, v: &View, c: &Comp, hs: &[Hole], sim: &Sim, look: Look,
 }
 
 /// Fantasma del chip que se va a colocar.
-pub fn chip_ghost(p: &Painter, v: &View, board: u8, col: i32) {
+pub fn chip_ghost(p: &Painter, v: &View, board: u8, col: i32, pines: u8) {
     let v = &v.board_view(board);
     let s = v.s;
     let bx = (board.saturating_sub(1)) as f32 * BOARD_OFFSET;
+    let ancho = (pines / 2) as f32;
     let r = Rect::from_min_max(
         pos2(
             v.p(bx + col as f32 + 1.0, 0.0).x - 0.6 * s,
             v.p(0.0, 8.35).y,
         ),
         pos2(
-            v.p(bx + col as f32 + 7.0, 0.0).x + 0.6 * s,
+            v.p(bx + col as f32 + ancho, 0.0).x + 0.6 * s,
             v.p(0.0, 10.65).y,
         ),
     );
@@ -1125,7 +1178,7 @@ pub fn hit(v: &View, c: &Comp, hs: &[Hole], m: Pos2, fidx: usize) -> Option<f32>
         Tipo::Chip => {
             let r = Rect::from_min_max(
                 pos2(v.h(hs[0]).x - 0.6 * s, v.p(0.0, 8.35).y),
-                pos2(v.h(hs[6]).x + 0.6 * s, v.p(0.0, 10.65).y),
+                pos2(v.h(hs[hs.len() / 2 - 1]).x + 0.6 * s, v.p(0.0, 10.65).y),
             );
             if r.contains(m) {
                 0.0

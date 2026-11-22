@@ -121,9 +121,11 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
     };
     for (x, _) in de(Tipo::Chip) {
         let m = x.modelo.clone().unwrap_or_default();
-        let n = chip_info(&m).map(|i| i.nombre).unwrap_or("");
+        let info = chip_info(&m);
+        let n = info.map(|i| i.nombre).unwrap_or("");
+        let p = info.map(|i| i.pines).unwrap_or(14);
         add(
-            format!("chip {m} ({n}, encapsulado DIP de 14 patas)"),
+            format!("chip {m} ({n}, encapsulado DIP de {p} patas)"),
             &x.id,
         );
     }
@@ -223,11 +225,11 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
                 format!("Toma el chip {m}: tiene {}.", info.nombre),
                 "Busca la muesca (media luna) o el puntito en un extremo: marca el lado del pin 1.".into(),
                 "Orienta el chip con la muesca hacia la IZQUIERDA (hacia la columna 1).".into(),
-                format!("Colócalo encima del canal central{}: las 7 patas de abajo (pines 1 a 7) van en la fila f, columnas {} a {}; las 7 de arriba (pines 14 a 8) en la fila e, columnas {} a {}.", placa, col, col + 6, col, col + 6),
-                format!("Comprueba: el pin 1 queda en {} y el pin 14 en {}.", h[0].name(), h[13].name()),
+                format!("Colócalo encima del canal central{}: las {} patas de abajo (pines 1 a {}) van en la fila f, columnas {} a {}; las {} de arriba (pines {} a {}) en la fila e, columnas {} a {}.", placa, info.pines / 2, info.pines / 2, col, col + info.pines as i32 / 2 - 1, info.pines / 2, info.pines, info.pines / 2 + 1, col, col + info.pines as i32 / 2 - 1),
+                format!("Comprueba: el pin 1 queda en {} y el pin {} en {}.", h[0].name(), info.pines, h[info.pines as usize - 1].name()),
                 "Alinea todas las patas antes de empujar y presiona de forma pareja con los dos pulgares hasta que entre del todo. Si las patas están muy abiertas, apóyalas de lado sobre la mesa y dóblalas un poco hacia dentro.".into(),
-                format!("Patillaje: pin 14 = VCC (+), pin 7 = GND (-); {}.", info.pinout()),
-                if info.gate == Gate::Not {
+                format!("Patillaje: pin {} = VCC (+), pin {} = GND (-); {}.", info.vcc, info.gnd, info.pinout()),
+                if matches!(info.func, ChipFunc::Gates(Gate::Not)) {
                     "Ojo con el 7404: las compuertas 4, 5 y 6 tienen la SALIDA en los pines 8, 10 y 12 (la entrada está en 9, 11 y 13). En las compuertas 1 a 3 la entrada es el pin impar y la salida el par. Guíate por los números impresos."
                 } else {
                     "Los números impresos marcan el pin 1 en la esquina de la muesca; los pares entrada-salida son los del patillaje."
@@ -469,7 +471,7 @@ pub fn instrucciones(c: &Circuito, sim: &Sim, tabla: Option<&Tabla>) -> Vec<Paso
     prob.extend([
         "Un LED no enciende: revisa su polaridad y que su pata y la de la resistencia estén en la misma columna (mismo grupo de 5).".to_string(),
         "Nada funciona: comprueba que la fuente da voltaje y que los rieles no están cortados a la mitad.".into(),
-        "El chip no responde: mide con el multímetro entre el pin 14 y el pin 7; deben verse unos 5 V.".into(),
+        "El chip no responde: mide con el multímetro entre VCC y GND; deben verse unos 5 V.".into(),
         "Una pieza va floja: sácala y vuelve a meterla hasta el fondo; a veces el orificio está gastado, prueba otro de la misma columna.".into(),
         "Para medir: multímetro en voltaje de continua (V DC), punta negra al riel -, punta roja en el punto a medir; compara con la sonda del simulador (pasa el ratón sobre un orificio).".into(),
     ]);

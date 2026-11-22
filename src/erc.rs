@@ -91,8 +91,11 @@ pub fn check(c: &Circuito, s: &Sim) -> Vec<Issue> {
                 "CI_SIN_VCC",
                 Severity::Error,
                 format!(
-                    "{} ({}) no tiene alimentación: lleva el pin 14 (VCC) al +5 V y el pin 7 (GND) a GND.",
-                    ch.id, ch.modelo
+                    "{} ({}) no tiene alimentación: lleva el pin {} (VCC) al +5 V y el pin {} (GND) a GND.",
+                    ch.id,
+                    ch.modelo,
+                    chip_info(&ch.modelo).map(|i| i.vcc).unwrap_or(14),
+                    chip_info(&ch.modelo).map(|i| i.gnd).unwrap_or(7)
                 ),
                 vec![ch.id.clone()],
             ));

@@ -1,0 +1,132 @@
+{
+  "nombre": "Ejemplo — pulsador momentáneo",
+  "columnas": 60,
+  "tableros": 3,
+  "componentes": [
+    {
+      "id": "F1",
+      "tipo": "fuente",
+      "pines": [
+        "t+1",
+        "t-1"
+      ],
+      "valor": 5.0
+    },
+    {
+      "id": "L1",
+      "tipo": "etiqueta",
+      "pines": [
+        "t+2"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L2",
+      "tipo": "etiqueta",
+      "pines": [
+        "t-2"
+      ],
+      "nombre": "GND"
+    },
+    {
+      "id": "B1",
+      "tipo": "pulsador",
+      "pines": [
+        "f10",
+        "f12"
+      ],
+      "presionado": false
+    },
+    {
+      "id": "L3",
+      "tipo": "etiqueta",
+      "pines": [
+        "g10"
+      ],
+      "nombre": "5V"
+    },
+    {
+      "id": "L4",
+      "tipo": "etiqueta",
+      "pines": [
+        "g12"
+      ],
+      "nombre": "P"
+    },
+    {
+      "id": "R1",
+      "tipo": "resistencia",
+      "pines": [
+        "f14",
+        "f16"
+      ],
+      "valor": 10000.0
+    },
+    {
+      "id": "L5",
+      "tipo": "etiqueta",
+      "pines": [
+        "g14"
+      ],
+      "nombre": "P"
+    },
+    {
+      "id": "L6",
+      "tipo": "etiqueta",
+      "pines": [
+        "g16"
+      ],
+      "nombre": "GND"
+    },
+    {
+      "id": "R2",
+      "tipo": "resistencia",
+      "pines": [
+        "f20",
+        "f21"
+      ],
+      "valor": 330.0
+    },
+    {
+      "id": "L7",
+      "tipo": "etiqueta",
+      "pines": [
+        "g20"
+      ],
+      "nombre": "P"
+    },
+    {
+      "id": "L8",
+      "tipo": "etiqueta",
+      "pines": [
+        "g21"
+      ],
+      "nombre": "LED_A"
+    },
+    {
+      "id": "D1",
+      "tipo": "led",
+      "pines": [
+        "f22",
+        "f23"
+      ],
+      "color": "verde"
+    },
+    {
+      "id": "L9",
+      "tipo": "etiqueta",
+      "pines": [
+        "g22"
+      ],
+      "nombre": "LED_A"
+    },
+    {
+      "id": "L10",
+      "tipo": "etiqueta",
+      "pines": [
+        "g23"
+      ],
+      "nombre": "GND"
+    }
+  ]
+}

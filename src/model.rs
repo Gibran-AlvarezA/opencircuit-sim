@@ -208,12 +208,29 @@ impl Gate {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ChipFunc {
+    Gates(Gate),
+    Decoder3To8,
+    Adder4,
+    Adder4Legacy,
+    Bcd7Seg,
+    Mux8,
+    Mux2x4,
+    Comparator4,
+}
+
 pub struct ChipInfo {
     pub modelo: &'static str,
-    pub gate: Gate,
     pub nombre: &'static str,
+    pub pines: u8,
+    pub vcc: u8,
+    pub gnd: u8,
+    pub func: ChipFunc,
     /// (pines de entrada, pin de salida) de cada compuerta.
     pub gates: &'static [(&'static [u8], u8)],
+    /// Nombres de los pines que no son alimentación.
+    pub pin_names: &'static [(u8, &'static str)],
 }
 
 const QUAD: &[(&[u8], u8)] = &[(&[1, 2], 3), (&[4, 5], 6), (&[9, 10], 8), (&[12, 13], 11)];
@@ -230,39 +247,238 @@ const HEX: &[(&[u8], u8)] = &[
 pub const CHIPS: &[ChipInfo] = &[
     ChipInfo {
         modelo: "74HC08",
-        gate: Gate::And,
         nombre: "4 compuertas AND",
+        pines: 14,
+        vcc: 14,
+        gnd: 7,
+        func: ChipFunc::Gates(Gate::And),
         gates: QUAD,
+        pin_names: &[],
     },
     ChipInfo {
         modelo: "74HC32",
-        gate: Gate::Or,
         nombre: "4 compuertas OR",
+        pines: 14,
+        vcc: 14,
+        gnd: 7,
+        func: ChipFunc::Gates(Gate::Or),
         gates: QUAD,
+        pin_names: &[],
     },
     ChipInfo {
         modelo: "74HC86",
-        gate: Gate::Xor,
         nombre: "4 compuertas XOR",
+        pines: 14,
+        vcc: 14,
+        gnd: 7,
+        func: ChipFunc::Gates(Gate::Xor),
         gates: QUAD,
+        pin_names: &[],
     },
     ChipInfo {
         modelo: "74HC00",
-        gate: Gate::Nand,
         nombre: "4 compuertas NAND",
+        pines: 14,
+        vcc: 14,
+        gnd: 7,
+        func: ChipFunc::Gates(Gate::Nand),
         gates: QUAD,
+        pin_names: &[],
     },
     ChipInfo {
         modelo: "74HC02",
-        gate: Gate::Nor,
         nombre: "4 compuertas NOR",
+        pines: 14,
+        vcc: 14,
+        gnd: 7,
+        func: ChipFunc::Gates(Gate::Nor),
         gates: NOR4,
+        pin_names: &[],
     },
     ChipInfo {
         modelo: "74HC04",
-        gate: Gate::Not,
         nombre: "6 inversores NOT",
+        pines: 14,
+        vcc: 14,
+        gnd: 7,
+        func: ChipFunc::Gates(Gate::Not),
         gates: HEX,
+        pin_names: &[],
+    },
+    ChipInfo {
+        modelo: "74138",
+        nombre: "decodificador 3 a 8",
+        pines: 16,
+        vcc: 16,
+        gnd: 8,
+        func: ChipFunc::Decoder3To8,
+        gates: &[],
+        pin_names: &[
+            (1, "A"),
+            (2, "B"),
+            (3, "C"),
+            (4, "/G2A"),
+            (5, "/G2B"),
+            (6, "G1"),
+            (7, "/Y7"),
+            (9, "/Y6"),
+            (10, "/Y5"),
+            (11, "/Y4"),
+            (12, "/Y3"),
+            (13, "/Y2"),
+            (14, "/Y1"),
+            (15, "/Y0"),
+        ],
+    },
+    ChipInfo {
+        modelo: "74283",
+        nombre: "sumador binario de 4 bits",
+        pines: 16,
+        vcc: 16,
+        gnd: 8,
+        func: ChipFunc::Adder4,
+        gates: &[],
+        pin_names: &[
+            (1, "S2"),
+            (2, "B2"),
+            (3, "A2"),
+            (4, "S1"),
+            (5, "A1"),
+            (6, "B1"),
+            (7, "C0"),
+            (9, "C4"),
+            (10, "S4"),
+            (11, "B4"),
+            (12, "A4"),
+            (13, "S3"),
+            (14, "A3"),
+            (15, "B3"),
+        ],
+    },
+    ChipInfo {
+        modelo: "7483",
+        nombre: "sumador binario de 4 bits (patillaje antiguo)",
+        pines: 16,
+        vcc: 5,
+        gnd: 12,
+        func: ChipFunc::Adder4Legacy,
+        gates: &[],
+        pin_names: &[
+            (1, "A4"),
+            (2, "S3"),
+            (3, "A3"),
+            (4, "B3"),
+            (6, "S2"),
+            (7, "B2"),
+            (8, "A2"),
+            (9, "S1"),
+            (10, "A1"),
+            (11, "B1"),
+            (13, "C0"),
+            (14, "C4"),
+            (15, "S4"),
+            (16, "B4"),
+        ],
+    },
+    ChipInfo {
+        modelo: "7448",
+        nombre: "decodificador BCD a 7 segmentos",
+        pines: 16,
+        vcc: 16,
+        gnd: 8,
+        func: ChipFunc::Bcd7Seg,
+        gates: &[],
+        pin_names: &[
+            (1, "B"),
+            (2, "C"),
+            (3, "/LT"),
+            (4, "/BI/RBO"),
+            (5, "/RBI"),
+            (6, "D"),
+            (7, "A"),
+            (9, "e"),
+            (10, "d"),
+            (11, "c"),
+            (12, "b"),
+            (13, "a"),
+            (14, "g"),
+            (15, "f"),
+        ],
+    },
+    ChipInfo {
+        modelo: "74151",
+        nombre: "multiplexor 8 a 1",
+        pines: 16,
+        vcc: 16,
+        gnd: 8,
+        func: ChipFunc::Mux8,
+        gates: &[],
+        pin_names: &[
+            (1, "D3"),
+            (2, "D2"),
+            (3, "D1"),
+            (4, "D0"),
+            (5, "Y"),
+            (6, "W"),
+            (7, "/G"),
+            (9, "C"),
+            (10, "B"),
+            (11, "A"),
+            (12, "D7"),
+            (13, "D6"),
+            (14, "D5"),
+            (15, "D4"),
+        ],
+    },
+    ChipInfo {
+        modelo: "74157",
+        nombre: "cuadruple multiplexor 2 a 1",
+        pines: 16,
+        vcc: 16,
+        gnd: 8,
+        func: ChipFunc::Mux2x4,
+        gates: &[],
+        pin_names: &[
+            (1, "S"),
+            (2, "1A"),
+            (3, "1B"),
+            (4, "1Y"),
+            (5, "2A"),
+            (6, "2B"),
+            (7, "2Y"),
+            (9, "3Y"),
+            (10, "3B"),
+            (11, "3A"),
+            (12, "4Y"),
+            (13, "4B"),
+            (14, "4A"),
+            (15, "/E"),
+        ],
+    },
+    ChipInfo {
+        modelo: "7485",
+        nombre: "comparador de magnitud de 4 bits",
+        pines: 16,
+        vcc: 16,
+        gnd: 8,
+        func: ChipFunc::Comparator4,
+        gates: &[],
+        pin_names: &[
+            (1, "B3"),
+            (2, "A<B"),
+            (3, "A=B"),
+            (4, "A>B"),
+            (5, "A>B"),
+            (6, "A=B"),
+            (7, "A<B"),
+            (9, "B0"),
+            (10, "A0"),
+            (11, "B1"),
+            (12, "A1"),
+            (13, "A2"),
+            (14, "B2"),
+            (15, "A3"),
+        ],
     },
 ];
 
@@ -278,18 +494,63 @@ pub fn chip_info(m: &str) -> Option<&'static ChipInfo> {
                 "74HC00" => matches!(m.as_str(), "7400" | "74LS00" | "74HCT00"),
                 "74HC02" => matches!(m.as_str(), "7402" | "74LS02" | "74HCT02"),
                 "74HC04" => matches!(m.as_str(), "7404" | "74LS04" | "74HCT04"),
+                "74138" => matches!(m.as_str(), "74HC138" | "74LS138"),
+                "74283" => matches!(m.as_str(), "74HC283" | "74LS283"),
+                "7483" => matches!(m.as_str(), "74HC83" | "74LS83" | "74LS83A"),
+                "7448" => matches!(m.as_str(), "74HC48" | "74LS48"),
+                "74151" => matches!(m.as_str(), "74HC151" | "74LS151"),
+                "74157" => matches!(m.as_str(), "74HC157" | "74LS157"),
+                "7485" => matches!(m.as_str(), "74HC85" | "74LS85"),
                 _ => false,
             }
     })
 }
 
 impl ChipInfo {
+    pub fn input_pins(&self) -> Vec<u8> {
+        match self.func {
+            ChipFunc::Gates(_) => self
+                .gates
+                .iter()
+                .flat_map(|(ins, _)| ins.iter().copied())
+                .collect(),
+            ChipFunc::Decoder3To8 => vec![1, 2, 3, 4, 5, 6],
+            ChipFunc::Adder4 => vec![5, 3, 14, 12, 6, 2, 15, 11, 7],
+            ChipFunc::Adder4Legacy => vec![10, 8, 3, 1, 11, 7, 4, 16, 13],
+            ChipFunc::Bcd7Seg => vec![7, 1, 2, 6, 3, 4, 5],
+            ChipFunc::Mux8 => vec![4, 3, 2, 1, 15, 14, 13, 12, 11, 10, 9, 7],
+            ChipFunc::Mux2x4 => vec![1, 15, 2, 3, 5, 6, 11, 10, 14, 13],
+            ChipFunc::Comparator4 => vec![10, 12, 13, 15, 9, 11, 14, 1, 2, 3, 4],
+        }
+    }
+
+    pub fn output_pins(&self) -> Vec<u8> {
+        match self.func {
+            ChipFunc::Gates(_) => self.gates.iter().map(|(_, out)| *out).collect(),
+            ChipFunc::Decoder3To8 => vec![15, 14, 13, 12, 11, 10, 9, 7],
+            ChipFunc::Adder4 => vec![4, 1, 13, 10, 9],
+            ChipFunc::Adder4Legacy => vec![9, 6, 2, 15, 14],
+            ChipFunc::Bcd7Seg => vec![13, 12, 11, 10, 9, 15, 14],
+            ChipFunc::Mux8 => vec![5, 6],
+            ChipFunc::Mux2x4 => vec![4, 7, 9, 12],
+            ChipFunc::Comparator4 => vec![5, 6, 7],
+        }
+    }
+
     pub fn pin_fn(&self, pin: u8) -> String {
-        if pin == 14 {
+        if pin == self.vcc {
             return "VCC (+)".into();
         }
-        if pin == 7 {
+        if pin == self.gnd {
             return "GND (-)".into();
+        }
+        if let Some((_, name)) = self.pin_names.iter().find(|(p, _)| *p == pin) {
+            let kind = if self.output_pins().contains(&pin) {
+                "salida"
+            } else {
+                "entrada"
+            };
+            return format!("{kind} {name}");
         }
         for (i, (ins, out)) in self.gates.iter().enumerate() {
             if *out == pin {
@@ -301,27 +562,160 @@ impl ChipInfo {
         }
         "sin uso".into()
     }
+
     pub fn pinout(&self) -> String {
-        self.gates
+        if !self.gates.is_empty() {
+            return self
+                .gates
+                .iter()
+                .enumerate()
+                .map(|(i, (ins, out))| {
+                    let ins: Vec<String> = ins.iter().map(|p| p.to_string()).collect();
+                    let ent = if ins.len() == 1 {
+                        format!("entrada {}", ins[0])
+                    } else {
+                        format!("entradas {}", ins.join(" y "))
+                    };
+                    format!("compuerta {}: {} → salida {}", i + 1, ent, out)
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+        }
+        self.pin_names
             .iter()
-            .enumerate()
-            .map(|(i, (ins, out))| {
-                let ins: Vec<String> = ins.iter().map(|p| p.to_string()).collect();
-                let ent = if ins.len() == 1 {
-                    format!("entrada {}", ins[0])
-                } else {
-                    format!("entradas {}", ins.join(" y "))
-                };
-                format!("compuerta {}: {} → salida {}", i + 1, ent, out)
-            })
+            .map(|(p, n)| format!("pin {p}: {n}"))
             .collect::<Vec<_>>()
             .join("; ")
     }
+
+    /// Evalúa el chip completo. `v[p]` es el nivel lógico del pin `p`.
+    pub fn eval(&self, v: &[bool; 17]) -> Vec<(u8, bool)> {
+        match self.func {
+            ChipFunc::Gates(_) => self
+                .gates
+                .iter()
+                .map(|(ins, out)| {
+                    let ins: Vec<bool> = ins.iter().map(|p| v[*p as usize]).collect();
+                    (
+                        *out,
+                        match self.func {
+                            ChipFunc::Gates(g) => g.eval(&ins),
+                            _ => false,
+                        },
+                    )
+                })
+                .collect(),
+            ChipFunc::Decoder3To8 => {
+                let enabled = v[6] && !v[4] && !v[5];
+                let n = v[1] as usize + 2 * v[2] as usize + 4 * v[3] as usize;
+                [15u8, 14, 13, 12, 11, 10, 9, 7]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (*p, !(enabled && i == n)))
+                    .collect()
+            }
+            ChipFunc::Adder4 | ChipFunc::Adder4Legacy => {
+                let (ap, bp, sp, c0, c4) = if self.func == ChipFunc::Adder4 {
+                    ([5u8, 3, 14, 12], [6u8, 2, 15, 11], [4u8, 1, 13, 10], 7, 9)
+                } else {
+                    ([10u8, 8, 3, 1], [11u8, 7, 4, 16], [9u8, 6, 2, 15], 13, 14)
+                };
+                let a = bits(v, &ap);
+                let b = bits(v, &bp);
+                let total = a + b + v[c0 as usize] as usize;
+                let mut out: Vec<(u8, bool)> = sp
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (*p, (total >> i) & 1 == 1))
+                    .collect();
+                out.push((c4, total > 15));
+                out
+            }
+            ChipFunc::Bcd7Seg => {
+                let code = bits(v, &[7, 1, 2, 6]);
+                let segs = [13u8, 12, 11, 10, 9, 15, 14];
+                let blank = !v[4] || (code == 0 && !v[5]);
+                let lamps = !v[3];
+                let pat = if lamps {
+                    "abcdefg"
+                } else if blank {
+                    ""
+                } else {
+                    match code {
+                        0 => "abcdef",
+                        1 => "bc",
+                        2 => "abdeg",
+                        3 => "abcdg",
+                        4 => "bcfg",
+                        5 => "acdfg",
+                        6 => "acdefg",
+                        7 => "abc",
+                        8 => "abcdefg",
+                        9 => "abcdfg",
+                        10 => "abcdef",
+                        11 => "bc",
+                        12 => "abdeg",
+                        13 => "abcdg",
+                        14 => "bcfg",
+                        _ => "acdfg",
+                    }
+                };
+                "abcdefg"
+                    .chars()
+                    .zip(segs)
+                    .map(|(ch, p)| (p, pat.contains(ch)))
+                    .collect()
+            }
+            ChipFunc::Mux8 => {
+                let d = [4u8, 3, 2, 1, 15, 14, 13, 12];
+                if v[7] {
+                    vec![(5, false), (6, true)]
+                } else {
+                    let n = v[11] as usize + 2 * v[10] as usize + 4 * v[9] as usize;
+                    let y = v[d[n] as usize];
+                    vec![(5, y), (6, !y)]
+                }
+            }
+            ChipFunc::Mux2x4 => {
+                let a = [2u8, 5, 11, 14];
+                let b = [3u8, 6, 10, 13];
+                let y = [4u8, 7, 9, 12];
+                (0..4)
+                    .map(|i| {
+                        let out = !v[15]
+                            && if v[1] {
+                                v[b[i] as usize]
+                            } else {
+                                v[a[i] as usize]
+                            };
+                        (y[i], out)
+                    })
+                    .collect()
+            }
+            ChipFunc::Comparator4 => {
+                let a = bits(v, &[10, 12, 13, 15]);
+                let b = bits(v, &[9, 11, 14, 1]);
+                if a == b {
+                    vec![(5, v[4]), (6, v[3]), (7, v[2])]
+                } else {
+                    vec![(5, a > b), (6, false), (7, a < b)]
+                }
+            }
+        }
+    }
 }
 
-/// Orificio del pin `pin` (1..14) de un chip cuyo pin 1 está en la columna `col`, fila f.
-pub fn chip_pin_hole(board: u8, col: i32, pin: u8) -> Hole {
-    if pin <= 7 {
+fn bits(v: &[bool; 17], pins: &[u8]) -> usize {
+    pins.iter()
+        .enumerate()
+        .map(|(i, p)| (v[*p as usize] as usize) << i)
+        .sum()
+}
+
+/// Orificio del pin `pin` de un chip DIP de `pines` patas.
+pub fn chip_pin_hole(board: u8, col: i32, pin: u8, pines: u8) -> Hole {
+    let half = pines / 2;
+    if pin <= half {
         Hole::Main {
             board,
             row: 5,
@@ -331,7 +725,7 @@ pub fn chip_pin_hole(board: u8, col: i32, pin: u8) -> Hole {
         Hole::Main {
             board,
             row: 4,
-            col: col + 14 - pin as i32,
+            col: col + pines as i32 - pin as i32,
         }
     }
 }
@@ -369,8 +763,12 @@ pub enum Tipo {
     Led,
     #[serde(alias = "ic", alias = "compuerta", alias = "integrado")]
     Chip,
-    #[serde(alias = "switch", alias = "pulsador", alias = "boton")]
+    #[serde(alias = "switch")]
     Interruptor,
+    #[serde(alias = "pot")]
+    Potenciometro,
+    #[serde(alias = "boton", alias = "pushbutton")]
+    Pulsador,
     #[serde(alias = "wire", alias = "puente", alias = "jumper")]
     Cable,
     #[serde(
@@ -392,6 +790,8 @@ impl Tipo {
             Tipo::Led => "D",
             Tipo::Chip => "U",
             Tipo::Interruptor => "S",
+            Tipo::Potenciometro => "P",
+            Tipo::Pulsador => "B",
             Tipo::Cable => "W",
             Tipo::Display => "DS",
             Tipo::Etiqueta => "L",
@@ -404,6 +804,8 @@ impl Tipo {
             Tipo::Led => "LED",
             Tipo::Chip => "Chip lógico",
             Tipo::Interruptor => "Interruptor",
+            Tipo::Potenciometro => "Potenciómetro",
+            Tipo::Pulsador => "Pulsador momentáneo",
             Tipo::Cable => "Cable",
             Tipo::Display => "Display de 7 segmentos",
             Tipo::Etiqueta => "Etiqueta de red",
@@ -441,6 +843,12 @@ pub struct Comp {
     pub nombre: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub cerrado: bool,
+    /// Potenciómetro: posición del cursor, 0.0 a 1.0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub posicion: Option<f64>,
+    /// Pulsador: verdadero solo mientras se mantiene presionado.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub presionado: bool,
     /// Cable: puntos de quiebre de su recorrido. Fuente: esquina de su caja si se movió.
     /// (unidades de placa)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -461,6 +869,8 @@ impl Comp {
             modelo: None,
             nombre: None,
             cerrado: false,
+            posicion: None,
+            presionado: false,
             puntos: Vec::new(),
             carpeta: None,
         }
@@ -489,6 +899,9 @@ impl Comp {
     pub fn ohmios(&self) -> f64 {
         self.valor.unwrap_or(330.0)
     }
+    pub fn posicion(&self) -> f64 {
+        self.posicion.unwrap_or(0.5).clamp(0.0, 1.0)
+    }
     pub fn voltios(&self) -> f64 {
         self.valor.unwrap_or(5.0)
     }
@@ -507,7 +920,7 @@ impl Comp {
     pub fn holes(&self) -> Result<Vec<Hole>, String> {
         if self.tipo == Tipo::Chip {
             let m = self.modelo.clone().unwrap_or_default();
-            if chip_info(&m).is_none() {
+            let Some(info) = chip_info(&m) else {
                 let l: Vec<&str> = CHIPS.iter().map(|c| c.modelo).collect();
                 return Err(format!(
                     "{}: modelo de chip desconocido '{}' (usa {})",
@@ -515,7 +928,7 @@ impl Comp {
                     m,
                     l.join(", ")
                 ));
-            }
+            };
             let p = self
                 .pines
                 .first()
@@ -529,14 +942,16 @@ impl Comp {
                     ))
                 }
             };
-            if col + 6 > MAX_COLS {
+            let max = MAX_COLS - (info.pines as i32 / 2 - 1);
+            if col > max {
                 return Err(format!(
                     "{}: el chip no cabe; el pin 1 debe estar en la columna {} o antes",
-                    self.id,
-                    MAX_COLS - 6
+                    self.id, max
                 ));
             }
-            return Ok((1..=14).map(|p| chip_pin_hole(board, col, p)).collect());
+            return Ok((1..=info.pines)
+                .map(|p| chip_pin_hole(board, col, p, info.pines))
+                .collect());
         }
         if self.tipo == Tipo::Display {
             if self.pines.len() == 1 {
@@ -581,6 +996,34 @@ impl Comp {
             if v.iter().collect::<HashSet<_>>().len() != v.len() {
                 return Err(format!(
                     "{}: los 8 pines del display deben ir en orificios distintos",
+                    self.id
+                ));
+            }
+            return Ok(v);
+        }
+        if matches!(self.tipo, Tipo::Potenciometro | Tipo::Pulsador) {
+            let n = if self.tipo == Tipo::Potenciometro {
+                3
+            } else {
+                2
+            };
+            if self.pines.len() != n {
+                return Err(format!(
+                    "{}: {} necesita exactamente {n} orificios",
+                    self.id,
+                    self.tipo.nombre()
+                ));
+            }
+            let mut v = Vec::new();
+            for p in &self.pines {
+                v.push(Hole::parse(p).ok_or(format!(
+                    "{}: el orificio '{}' no existe (ejemplos válidos: a1, j30, t+5, b-12, a1@2)",
+                    self.id, p
+                ))?);
+            }
+            if v.iter().collect::<HashSet<_>>().len() != v.len() {
+                return Err(format!(
+                    "{}: los {n} pines deben ir en orificios distintos",
                     self.id
                 ));
             }
@@ -657,6 +1100,8 @@ impl Comp {
                 };
                 l[i.min(l.len() - 1)].into()
             }
+            Tipo::Potenciometro => ["extremo A", "cursor", "extremo B"][i.min(2)].into(),
+            Tipo::Pulsador => format!("contacto {}", i + 1),
             Tipo::Etiqueta => format!("red «{}»", self.red()),
             Tipo::Cable => format!("extremo {}", i + 1),
             _ => format!("pata {}", i + 1),
@@ -772,12 +1217,13 @@ impl Circuito {
             match c.holes() {
                 Err(e) => errs.push(e),
                 Ok(hs) => {
-                    if c.tipo == Tipo::Chip && hs[0].col() + 6 > self.columnas {
+                    let half = hs.len() as i32 / 2;
+                    if c.tipo == Tipo::Chip && hs[0].col() + half - 1 > self.columnas {
                         errs.push(format!(
                             "{}: el chip no cabe en una placa de {} columnas; mueve el pin 1 a la columna {} o antes.",
                             c.id,
                             self.columnas,
-                            self.columnas - 6
+                            self.columnas - (half - 1)
                         ));
                         continue;
                     }
@@ -904,8 +1350,23 @@ pub fn parse_text(s: &str) -> Result<Circuito, String> {
 // ---------- ejemplos ----------
 
 const PRACTICA5_JSON: &str = include_str!("../assets/practica5.json");
-const PRACTICA6_RUMBO_JSON: &str = include_str!("../assets/practica6_rumbo.json");
-const PRACTICA6_CELULAR_JSON: &str = include_str!("../assets/practica6_celular.json");
+const PRACTICA6_RUMBO_JSON: &str =
+    include_str!("../assets/Practica 6 - Daniel Gibran Alvarez Armienta - rumbo.json");
+const PRACTICA6_CELULAR_JSON: &str =
+    include_str!("../assets/Practica 6 - Daniel Gibran Alvarez Armienta - celular.json");
+const PRACTICA7_DECODER_JSON: &str =
+    include_str!("../assets/Practica 7 - Daniel Gibran Alvarez Armienta - decodificador.json");
+const PRACTICA7_SUMADOR_JSON: &str =
+    include_str!("../assets/Practica 7 - Daniel Gibran Alvarez Armienta - sumador.json");
+const PROYECTO_FINAL_JSON: &str = include_str!(
+    "../assets/Proyecto Final - Daniel Gibran Alvarez Armienta y Jose Salvador Arreguin Verdugo.json"
+);
+const EJEMPLO_74151_JSON: &str = include_str!("../assets/ejemplo_74151.json");
+const EJEMPLO_74157_JSON: &str = include_str!("../assets/ejemplo_74157.json");
+const EJEMPLO_7485_JSON: &str = include_str!("../assets/ejemplo_7485.json");
+const EJEMPLO_POT_JSON: &str = include_str!("../assets/ejemplo_potenciometro.json");
+const EJEMPLO_PULSADOR_JSON: &str = include_str!("../assets/ejemplo_pulsador.json");
+const EJEMPLO_ANALOGICO_JSON: &str = include_str!("../assets/ejemplo_analogico.json");
 
 pub fn ejemplos() -> Vec<Circuito> {
     use Tipo::*;
@@ -965,7 +1426,20 @@ pub fn ejemplos() -> Vec<Circuito> {
             ..Default::default()
         },
     ];
-    for json in [PRACTICA5_JSON, PRACTICA6_RUMBO_JSON, PRACTICA6_CELULAR_JSON] {
+    for json in [
+        PRACTICA5_JSON,
+        PRACTICA6_RUMBO_JSON,
+        PRACTICA6_CELULAR_JSON,
+        EJEMPLO_74151_JSON,
+        EJEMPLO_74157_JSON,
+        EJEMPLO_7485_JSON,
+        EJEMPLO_POT_JSON,
+        EJEMPLO_PULSADOR_JSON,
+        EJEMPLO_ANALOGICO_JSON,
+        PRACTICA7_DECODER_JSON,
+        PRACTICA7_SUMADOR_JSON,
+        PROYECTO_FINAL_JSON,
+    ] {
         if let Ok(p) = serde_json::from_str::<Circuito>(json) {
             v.push(p);
         }
@@ -1014,14 +1488,20 @@ cerrado / carpeta)
     pines = [ánodo (+, pata larga), cátodo (-)]. Colores: {leds}.
     Pon siempre una resistencia en serie (220 a 1000 ohmios).
 - {{"id":"S1","tipo":"interruptor","cerrado":false,"pines":["h3","h5"]}}
+- {{"id":"P1","tipo":"potenciometro","valor":10000,"posicion":0.5,"pines":["a5","a6","a7"]}}
+    pines = [extremo A, cursor, extremo B]. posicion va de 0 a 1.
+- {{"id":"B1","tipo":"pulsador","presionado":false,"pines":["h3","h5"]}}
+    Pulsador momentáneo: se cierra solo mientras se mantiene presionado.
 - {{"id":"W1","tipo":"cable","color":"rojo","pines":["t+5","a5"]}}   colores: {wires}.
     "carpeta" es opcional: agrupa la pieza, por ejemplo "Cables/rojo". Las subcarpetas
     se separan con "/". La app las muestra en la pestaña Grupos (enfocar, ocultar, ordenar).
 - {{"id":"U1","tipo":"chip","modelo":"74HC08","pines":["f12"]}}
     pines = [orificio del pin 1]. El chip queda sobre el canal central con la muesca
-    a la izquierda: pines 1-7 en la fila f, columnas N..N+6; pines 14-8 en la fila e,
-    columnas N..N+6 (pin 14 en eN, pin 8 en e(N+6)). N máximo {maxn}.
-    Pin 14 = VCC (+) y pin 7 = GND (-): ambos deben ir a la fuente.
+    a la izquierda. En DIP-14: pines 1-7 en la fila f, columnas N..N+6; pines 14-8
+    en la fila e, columnas N..N+6. En DIP-16: pines 1-8 en f, columnas N..N+7;
+    pines 16-9 en e, columnas N..N+7. N máximo: 54 en DIP-14 y 53 en DIP-16.
+    VCC y GND son los pines que indique el modelo (14/7 en DIP-14; 16/8 en la
+    mayoría de DIP-16; el 7483 usa 5/12): ambos deben ir a la fuente.
     Se aceptan 74HC08/7408/74LS08, 74HC32/7432/74LS32 y 74HC04/7404/74LS04
     (mismo patillaje y misma función a 5 V).
   Modelos:
@@ -1060,7 +1540,6 @@ EJEMPLO
 "#,
         leds = LED_COLORS.join(", "),
         wires = WIRE_COLORS.join(", "),
-        maxn = MAX_COLS - 6,
         chips = chips.join("\n"),
     )
 }
