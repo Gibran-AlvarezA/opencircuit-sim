@@ -312,7 +312,7 @@ cargo test
 cargo build --release
 ```
 
-La suite incluye simulación de compuertas, displays, etiquetas, conversión cables/etiquetas, grupos, rehacer, rutas ortogonales, los 32 casos de la Práctica 5 y los 16 de cada circuito de la Práctica 6.
+La suite incluye simulación de compuertas, displays, etiquetas, conversión cables/etiquetas, grupos, rehacer, rutas ortogonales, potenciómetro, pulsador, flujo MCP y validación de su schema, los 32 casos de la Práctica 5, los 16 casos de cada circuito de la Práctica 6, los casos de la Práctica 7 y las 512 combinaciones del proyecto final.
 
 ## Estructura del proyecto
 
@@ -325,7 +325,7 @@ src/route.rs   trazado ortogonal de cables con A*
 src/instr.rs   instrucciones de armado paso a paso
 src/mcp.rs     servidor MCP para agentes
 assets/        circuitos y datos de ejemplo
-tools/         generadores reproducibles de las Prácticas 5 y 6
+tools/         generadores reproducibles de las Prácticas 5, 6, 7 y proyecto final
 docs/          resumen del proceso y capturas
 ```
 
@@ -338,7 +338,7 @@ Más contexto sobre cómo se construyó: [docs/craft.md](docs/craft.md).
 - El ruteo de cables es heurístico: separa y esquiva piezas, pero no empaqueta haces perfectos.
 - Los binarios de macOS y Windows no están firmados; el sistema puede mostrar un aviso.
 - El release automático incluye macOS Intel; en Apple Silicon se puede ejecutar con Rosetta o compilar desde fuente.
-- La simulación es digital a 5 V; no modela analógicos ni potenciómetros.
+- La simulación está enfocada en lógica digital a 5 V y no es un simulador SPICE: no modela transitorios, AC ni componentes analógicos continuos. El potenciómetro sí se modela como resistencia ajustable y el pulsador como un interruptor momentáneo dentro del solver nodal.
 
 ## Contribuir
 

@@ -60,7 +60,43 @@ fn tool(name: &str, desc: &str, props: Value, req: &[&str]) -> Value {
 }
 
 fn tools() -> Vec<Value> {
-    let comp = json!({"type":"object","description":"Componente: {id, tipo (fuente|resistencia|led|chip|interruptor|cable), pines, valor?, color?, modelo?, cerrado?}"});
+    let comp = json!({
+        "type": "object",
+        "description": "Componente físico o conexión del circuito. Consulta ver_guia para pinouts y reglas.",
+        "properties": {
+            "id": {"type": "string"},
+            "tipo": {
+                "type": "string",
+                "enum": [
+                    "fuente", "resistencia", "led", "chip", "interruptor",
+                    "potenciometro", "pulsador", "cable", "display", "etiqueta"
+                ]
+            },
+            "pines": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1
+            },
+            "valor": {"type": "number"},
+            "posicion": {"type": "number", "minimum": 0, "maximum": 1},
+            "color": {"type": "string"},
+            "modelo": {"type": "string"},
+            "nombre": {"type": "string"},
+            "cerrado": {"type": "boolean"},
+            "presionado": {"type": "boolean"},
+            "puntos": {
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "carpeta": {"type": "string"}
+        },
+        "required": ["tipo", "pines"]
+    });
     vec![
         tool("ver_guia", "Explica la protoboard (nombres de orificios), los componentes, los chips y sus pines, con un ejemplo. Léela antes de armar.", json!({}), &[]),
         tool("ver_circuito", "Devuelve el circuito actual en JSON.", json!({}), &[]),
@@ -232,5 +268,73 @@ mod tests {
         .unwrap();
         assert!(cargar(&f).unwrap().find("D2").is_some());
         let _ = std::fs::remove_file(&f);
+    }
+
+    #[test]
+    fn schema_mcp_declara_todos_los_tipos_de_componente() {
+        let listado = tools();
+        let agregar = listado
+            .iter()
+            .find(|tool| tool["name"] == "agregar_componente")
+            .expect("debe existir agregar_componente");
+        let schema = &agregar["inputSchema"]["properties"]["componente"];
+        let tipos = schema["properties"]["tipo"]["enum"]
+            .as_array()
+            .expect("tipo debe tener enum")
+            .iter()
+            .map(|tipo| tipo.as_str().unwrap())
+            .collect::<Vec<_>>();
+
+        let tipos_esperados = [
+            "fuente",
+            "resistencia",
+            "led",
+            "chip",
+            "interruptor",
+            "potenciometro",
+            "pulsador",
+            "cable",
+            "display",
+            "etiqueta",
+        ];
+        assert_eq!(tipos.len(), tipos_esperados.len());
+        for esperado in tipos_esperados {
+            assert!(tipos.contains(&esperado), "falta el tipo MCP {esperado}");
+        }
+
+        let campos = [
+            ("id", "string"),
+            ("tipo", "string"),
+            ("pines", "array"),
+            ("valor", "number"),
+            ("posicion", "number"),
+            ("color", "string"),
+            ("modelo", "string"),
+            ("nombre", "string"),
+            ("cerrado", "boolean"),
+            ("presionado", "boolean"),
+            ("puntos", "array"),
+            ("carpeta", "string"),
+        ];
+        assert_eq!(schema["required"], json!(["tipo", "pines"]));
+        for (campo, tipo) in campos {
+            assert_eq!(
+                schema["properties"][campo]["type"], tipo,
+                "tipo JSON incorrecto para {campo}"
+            );
+        }
+        assert_eq!(schema["properties"]["pines"]["items"]["type"], "string");
+        assert_eq!(schema["properties"]["pines"]["minItems"], 1);
+        assert_eq!(schema["properties"]["posicion"]["type"], "number");
+        assert_eq!(schema["properties"]["posicion"]["minimum"], 0);
+        assert_eq!(schema["properties"]["posicion"]["maximum"], 1);
+        assert_eq!(schema["properties"]["puntos"]["type"], "array");
+        assert_eq!(schema["properties"]["puntos"]["items"]["type"], "array");
+        assert_eq!(
+            schema["properties"]["puntos"]["items"]["items"]["type"],
+            "number"
+        );
+        assert_eq!(schema["properties"]["puntos"]["items"]["minItems"], 2);
+        assert_eq!(schema["properties"]["puntos"]["items"]["maxItems"], 2);
     }
 }

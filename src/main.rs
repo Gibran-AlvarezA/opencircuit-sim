@@ -325,6 +325,7 @@ struct App {
     status: String,
     pegar: String,
     pegar_msg: String,
+    onboarding: bool,
     shot: Option<PathBuf>,
     frames: u32,
 }
@@ -476,6 +477,7 @@ impl App {
             status: "Listo. Pasa el ratón por la protoboard para medir voltajes; haz clic en un interruptor para cambiarlo.".into(),
             pegar: String::new(),
             pegar_msg: String::new(),
+            onboarding: fresh && shot.is_none(),
             shot,
             frames: 0,
         };
@@ -606,6 +608,51 @@ impl App {
         self.grupo = None;
         self.solo_grupo = false;
         self.status = msg;
+    }
+
+    fn onboarding_window(&mut self, ctx: &egui::Context) {
+        if !self.onboarding {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Primer circuito")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.heading("LED + resistencia");
+                ui.label("Aprende el flujo básico con un circuito que ya funciona:");
+                ui.label("1. Observa la fuente de 5 V, la resistencia de 330 Ω y el LED.");
+                ui.label("2. Abre «Instrucciones de armado» para seguir cada conexión.");
+                ui.label("3. Regresa a «Protoboard y simulación» y pasa el ratón por los nodos.");
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button("Abrir ejemplo guiado").clicked() {
+                        self.set_circuit(
+                            ejemplos()[0].clone(),
+                            "Ejemplo guiado cargado. Sigue las instrucciones de armado.".into(),
+                        );
+                        self.tab = Tab::Armado;
+                        self.onboarding = false;
+                    }
+                    if ui.button("Empezar vacío").clicked() {
+                        self.set_circuit(
+                            Circuito {
+                                nombre: "Mi circuito".into(),
+                                ..Default::default()
+                            },
+                            "Protoboard vacía. Empieza por la fuente.".into(),
+                        );
+                        self.onboarding = false;
+                    }
+                });
+                if ui.link("Cerrar").clicked() {
+                    self.onboarding = false;
+                }
+            });
+        if !open {
+            self.onboarding = false;
+        }
     }
 
     fn en_grupo(c: &Comp, f: &str) -> bool {
@@ -3022,6 +3069,13 @@ impl eframe::App for App {
                         }
                     });
                     if ui
+                        .button(RichText::new("Primer circuito").size(14.0))
+                        .on_hover_text("Abrir la guía de LED + resistencia")
+                        .clicked()
+                    {
+                        self.onboarding = true;
+                    }
+                    if ui
                         .button(RichText::new("Nuevo").size(14.0))
                         .on_hover_text("Protoboard vacía")
                         .clicked()
@@ -3078,6 +3132,7 @@ impl eframe::App for App {
                     });
                 });
             });
+        self.onboarding_window(ctx);
         egui::TopBottomPanel::bottom("status")
             .frame(
                 egui::Frame::new()
